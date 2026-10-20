@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import UIKit
 
 struct ContentView: View {
     @State private var expression = "y = 2x + 1"
@@ -7,6 +8,9 @@ struct ContentView: View {
     @State private var zoomAtStart: CGFloat = 1
     @State private var offset = CGSize.zero
     @State private var offsetAtStart = CGSize.zero
+    @State private var pinchStartZoom: CGFloat = 1
+    @State private var pinchStartOffset = CGSize.zero
+    @State private var pinchStartLocation: CGPoint = .zero
     @State private var showAnalysis = true
     @State private var enabledComparisonExpressions: Set<String> = []
     @State private var xStart = -5.0
@@ -203,16 +207,58 @@ struct ContentView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(.gray.opacity(0.25), lineWidth: 1))
             .contentShape(Rectangle())
-            .gesture(MagnificationGesture()
-                .onChanged { value in
-                    zoom = min(8, max(0.25, zoomAtStart * value))
-                }
-                .onEnded { _ in zoomAtStart = zoom })
-            .simultaneousGesture(DragGesture()
-                .onChanged { value in
-                    offset = CGSize(width: offsetAtStart.width + value.translation.width, height: offsetAtStart.height + value.translation.height)
-                }
-                .onEnded { _ in offsetAtStart = offset })
+            .overlay {
+                GraphGestureOverlay(
+                    onPinch: { scale, startLocation, currentLocation, state in
+                        switch state {
+                        case .began:
+                            pinchStartZoom = zoom
+                            zoomAtStart = zoom
+                            pinchStartOffset = offset
+                            offsetAtStart = offset
+                            pinchStartLocation = startLocation
+                        case .changed:
+                            let nextZoom = min(8, max(0.25, pinchStartZoom * scale))
+                            let factor = nextZoom / max(pinchStartZoom, 0.0001)
+                            let originAtStart = CGPoint(
+                                x: size.width / 2 + pinchStartOffset.width,
+                                y: size.height / 2 + pinchStartOffset.height
+                            )
+                            let anchoredOrigin = CGPoint(
+                                x: currentLocation.x - (pinchStartLocation.x - originAtStart.x) * factor,
+                                y: currentLocation.y - (pinchStartLocation.y - originAtStart.y) * factor
+                            )
+                            // Keep the mathematical point under the initial pinch centroid
+                            // under the moving centroid as the scale changes.
+                            zoom = nextZoom
+                            offset = CGSize(
+                                width: anchoredOrigin.x - size.width / 2,
+                                height: anchoredOrigin.y - size.height / 2
+                            )
+                        case .ended, .cancelled, .failed:
+                            zoomAtStart = zoom
+                            offsetAtStart = offset
+                        default:
+                            break
+                        }
+                    },
+                    onPan: { translation, state in
+                        switch state {
+                        case .began:
+                            offsetAtStart = offset
+                        case .changed:
+                            offset = CGSize(
+                                width: offsetAtStart.width + translation.width,
+                                height: offsetAtStart.height + translation.height
+                            )
+                        case .ended, .cancelled, .failed:
+                            offsetAtStart = offset
+                        default:
+                            break
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -616,6 +662,97 @@ private struct MathExpression {
         }
 
         private var peek: Character? { index < characters.count ? characters[index] : nil }
+    }
+}
+
+/// UIKit-backed gesture bridge provides pinch centroid locations on iOS 16,
+/// where SwiftUI's MagnificationGesture does not expose the gesture location.
+private struct GraphGestureOverlay: UIViewRepresentable {
+    let onPinch: (CGFloat, CGPoint, CGPoint, UIGestureRecognizer.State) -> Void
+    let onPan: (CGSize, UIGestureRecognizer.State) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPinch: onPinch, onPan: onPan)
+    }
+
+    func makeUIView(context: Context) -> GestureView {
+        let view = GestureView()
+        view.backgroundColor = .clear
+        view.isMultipleTouchEnabled = true
+
+        let pinch = UIPinchGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePinch(_:))
+        )
+        pinch.delegate = context.coordinator
+        view.addGestureRecognizer(pinch)
+
+        let pan = UIPanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePan(_:))
+        )
+        pan.minimumNumberOfTouches = 1
+        pan.maximumNumberOfTouches = 1
+        pan.delegate = context.coordinator
+        view.addGestureRecognizer(pan)
+
+        context.coordinator.view = view
+        return view
+    }
+
+    func updateUIView(_ uiView: GestureView, context: Context) {
+        context.coordinator.onPinch = onPinch
+        context.coordinator.onPan = onPan
+    }
+
+    final class GestureView: UIView {}
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var view: UIView?
+        var onPinch: (CGFloat, CGPoint, CGPoint, UIGestureRecognizer.State) -> Void
+        var onPan: (CGSize, UIGestureRecognizer.State) -> Void
+        private var pinchStartLocation: CGPoint = .zero
+
+        init(
+            onPinch: @escaping (CGFloat, CGPoint, CGPoint, UIGestureRecognizer.State) -> Void,
+            onPan: @escaping (CGSize, UIGestureRecognizer.State) -> Void
+        ) {
+            self.onPinch = onPinch
+            self.onPan = onPan
+        }
+
+        @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+            guard let view = recognizer.view else { return }
+            let currentLocation = recognizer.location(in: view)
+            if recognizer.state == .began {
+                pinchStartLocation = currentLocation
+            }
+            onPinch(recognizer.scale, pinchStartLocation, currentLocation, recognizer.state)
+        }
+
+        @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            guard let view = recognizer.view else { return }
+            let translation = recognizer.translation(in: view)
+            onPan(CGSize(width: translation.x, height: translation.y), recognizer.state)
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldReceive touch: UITouch
+        ) -> Bool {
+            // Pan is intentionally single-finger; pinch handles two-finger zoom.
+            if gestureRecognizer is UIPanGestureRecognizer {
+                return touch.view != nil
+            }
+            return true
+        }
     }
 }
 
