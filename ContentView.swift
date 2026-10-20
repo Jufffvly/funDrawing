@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import UIKit
 
 struct ContentView: View {
     @State private var expression = "y = 2x + 1"
@@ -219,7 +220,6 @@ struct ContentView: View {
                         case .changed:
                             let nextZoom = min(8, max(0.25, pinchStartZoom * scale))
                             let factor = nextZoom / max(pinchStartZoom, 0.0001)
-                            let baseUnit = min(size.width, size.height) * pinchStartZoom / 20
                             let originAtStart = CGPoint(
                                 x: size.width / 2 + pinchStartOffset.width,
                                 y: size.height / 2 + pinchStartOffset.height
@@ -230,7 +230,6 @@ struct ContentView: View {
                             )
                             // Keep the mathematical point under the initial pinch centroid
                             // under the moving centroid as the scale changes.
-                            _ = baseUnit
                             zoom = nextZoom
                             offset = CGSize(
                                 width: anchoredOrigin.x - size.width / 2,
