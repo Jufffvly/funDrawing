@@ -477,7 +477,7 @@ struct ContentView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 3) {
-                Text("\\(title) =")
+                Text("\(title) =")
                     .font(.caption.bold())
                 Spacer(minLength: 0)
                 Text(value, format: .number.precision(.fractionLength(1)))
@@ -488,7 +488,7 @@ struct ContentView: View {
                 get: { value },
                 set: { onChange($0) }
             ), in: range)
-            .accessibilityLabel("二次函数系数 \\(title)")
+            .accessibilityLabel("二次函数系数 \(title)")
         }
         .frame(maxWidth: .infinity)
     }
