@@ -606,7 +606,7 @@ struct ContentView: View {
                 }
 
                 Section {
-                    Text("支持 x、数字、括号、+ − × ÷、幂运算、隐式乘法（2x、2(x+1））及 sin、cos、tan、abs、sqrt、exp、ln、log、pi、e。")
+                    Text("支持 x、数字、括号、+ − × ÷、幂运算、隐式乘法（2x、2(x+1)）及 sin、cos、tan、abs、sqrt、exp、ln、log、pi、e。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
