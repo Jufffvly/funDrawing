@@ -627,18 +627,18 @@ struct ContentView: View {
                     // 数学函数快捷键：插入函数模板并将光标放入括号内。
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            expressionShortcut("sin", template: "sin()")
-                            expressionShortcut("cos", template: "cos()")
-                            expressionShortcut("tan", template: "tan()")
-                            expressionShortcut("√", template: "sqrt()")
-                            expressionShortcut("ln", template: "ln()")
-                            expressionShortcut("log", template: "log()")
-                            expressionShortcut("eˣ", template: "exp()")
+                            expressionShortcut("sin", template: "sin(x)")
+                            expressionShortcut("cos", template: "cos(x)")
+                            expressionShortcut("tan", template: "tan(x)")
+                            expressionShortcut("√", template: "sqrt(x)")
+                            expressionShortcut("ln", template: "ln(x)")
+                            expressionShortcut("log", template: "log(x)")
+                            expressionShortcut("eˣ", template: "exp(x)")
                             expressionShortcut("x²", template: "x^2")
                             expressionShortcut("xⁿ", template: "^")
                             expressionShortcut("π", template: "pi")
                             expressionShortcut("e", template: "e")
-                            expressionShortcut("abs", template: "abs()")
+                            expressionShortcut("abs", template: "abs(x)")
                         }
                         .padding(.vertical, 4)
                     }
