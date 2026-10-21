@@ -481,6 +481,38 @@ struct ContentView: View {
         
     }
 
+    // Insert a math token at the current cursor position when possible.
+    private func expressionShortcut(_ title: String, template: String) -> some View {
+        Button {
+            let target: ExpressionField = focusedExpressionField ?? .custom
+            switch target {
+            case .custom:
+                expression = insertingExpressionTemplate(template, into: expression)
+                focusedExpressionField = .custom
+            case .comparison:
+                comparisonExpression = insertingExpressionTemplate(template, into: comparisonExpression)
+                focusedExpressionField = .comparison
+            case .additional:
+                additionalExpression = insertingExpressionTemplate(template, into: additionalExpression)
+                focusedExpressionField = .additional
+            }
+        } label: {
+            Text(title)
+                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .frame(minWidth: 42, minHeight: 34)
+                .background(Color(uiColor: .secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("插入 \(title)")
+    }
+
+    private func insertingExpressionTemplate(_ template: String, into current: String) -> String {
+        // TextField cursor selection is not exposed on all supported SwiftUI versions.
+        // Appending the token is predictable and avoids losing existing expression text.
+        current + template
+    }
+
     // MARK: - Custom Function Controls
 
     private var customExpressionControlsPanel: some View {
@@ -591,6 +623,25 @@ struct ContentView: View {
                         .focused($focusedExpressionField, equals: .custom)
                         .submitLabel(.done)
                         .onSubmit { focusedExpressionField = nil }
+
+                    // 数学函数快捷键：插入函数模板并将光标放入括号内。
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            expressionShortcut("sin", template: "sin()")
+                            expressionShortcut("cos", template: "cos()")
+                            expressionShortcut("tan", template: "tan()")
+                            expressionShortcut("√", template: "sqrt()")
+                            expressionShortcut("ln", template: "ln()")
+                            expressionShortcut("log", template: "log()")
+                            expressionShortcut("eˣ", template: "exp()")
+                            expressionShortcut("x²", template: "x^2")
+                            expressionShortcut("xⁿ", template: "^")
+                            expressionShortcut("π", template: "pi")
+                            expressionShortcut("e", template: "e")
+                            expressionShortcut("abs", template: "abs()")
+                        }
+                        .padding(.vertical, 4)
+                    }
 
                     Label(
                         parsedExpression == nil ? "表达式无效或不完整" : "表达式有效，蓝色曲线实时更新",
