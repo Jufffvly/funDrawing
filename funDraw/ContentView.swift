@@ -108,7 +108,7 @@ struct ContentView: View {
                 NavigationStack {
                     graphPanel
                         .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
+                            ToolbarItem(placement: .navigationBarTrailing) {
                                 Button {
                                     showingControls = true
                                 } label: {
@@ -122,7 +122,7 @@ struct ContentView: View {
                     NavigationStack {
                         controlsPanel
                             .toolbar {
-                                ToolbarItem(placement: .topBarTrailing) {
+                                ToolbarItem(placement: .navigationBarTrailing) {
                                     Button("完成") {
                                         showingControls = false
                                     }
@@ -137,7 +137,7 @@ struct ContentView: View {
                 } detail: {
                     graphPanel
                         .toolbar {
-                            ToolbarItem(placement: .topBarLeading) {
+                            ToolbarItem(placement: .navigationBarLeading) {
                                 Button {
                                     columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
                                 } label: {
