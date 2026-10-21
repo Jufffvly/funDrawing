@@ -64,8 +64,10 @@ struct ContentView: View {
     @State private var animationSpeed = 1.0
     @State private var expression = "y = x^2 - 4"
     @State private var comparisonExpression = "y = x"
+    @State private var additionalExpression = "y = 2x + 1"
     @State private var isCustomExpressionVisible = false
     @State private var isComparisonVisible = false
+    @State private var isAdditionalExpressionVisible = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .detailOnly
 
     private var parsedExpression: MathEngine? {
@@ -74,6 +76,10 @@ struct ContentView: View {
 
     private var parsedComparisonExpression: MathEngine? {
         MathEngine(expression: comparisonExpression)
+    }
+
+    private var parsedAdditionalExpression: MathEngine? {
+        MathEngine(expression: additionalExpression)
     }
 
     private var quadraticAnalysis: QuadraticAnalysis? {
@@ -111,6 +117,7 @@ struct ContentView: View {
     private enum ExpressionField: Hashable {
         case custom
         case comparison
+        case additional
     }
 
     var body: some View {
@@ -196,6 +203,15 @@ struct ContentView: View {
                                         .font(.caption)
                                         .foregroundStyle(.orange)
                                 }
+                                Toggle("显示第二个自定义函数", isOn: $isAdditionalExpressionVisible)
+                                TextField("例如：y = 2x + 1", text: $additionalExpression)
+                                    .textFieldStyle(.roundedBorder)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .font(.system(.body, design: .monospaced))
+                                Label(parsedAdditionalExpression == nil ? "第二个函数表达式无效" : "第二个函数有效，紫色曲线实时更新", systemImage: parsedAdditionalExpression == nil ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(parsedAdditionalExpression == nil ? .orange : .purple)
                                 Text("支持 x、数字、括号、+ − × ÷、幂运算、隐式乘法（2x、2(x+1)）及 sin、cos、tan、abs、sqrt、exp、ln、log、pi、e。")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -387,6 +403,7 @@ struct ContentView: View {
                                     animationSpeed: animationSpeed,
                                     expression: isCustomExpressionVisible ? parsedExpression : nil,
                                     comparisonExpression: (isCustomExpressionVisible && isComparisonVisible) ? parsedComparisonExpression : nil,
+                                    additionalExpression: (isCustomExpressionVisible && isAdditionalExpressionVisible) ? parsedAdditionalExpression : nil,
                                     zeroes: detectedZeros,
                                     yIntercept: yIntercept,
                                     quadraticAnalysis: quadraticAnalysis,
@@ -581,6 +598,20 @@ struct ContentView: View {
                     )
                     .font(.caption)
                     .foregroundStyle(parsedExpression == nil ? .orange : .green)
+                }
+
+                Section("第二个自定义函数（紫色曲线）") {
+                    Toggle("显示第二个自定义函数", isOn: $isAdditionalExpressionVisible)
+                    TextField("例如：y = 2x + 1", text: $additionalExpression)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.system(.body, design: .monospaced))
+                        .focused($focusedExpressionField, equals: .additional)
+                        .submitLabel(.done)
+                        .onSubmit { focusedExpressionField = nil }
+                    Label(parsedAdditionalExpression == nil ? "表达式无效或不完整" : "表达式有效，紫色曲线实时更新", systemImage: parsedAdditionalExpression == nil ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(parsedAdditionalExpression == nil ? .orange : .purple)
                 }
 
                 Section("比较函数") {
@@ -1045,6 +1076,7 @@ struct ContentView: View {
 
         isCustomExpressionVisible = false
         isComparisonVisible = false
+        isAdditionalExpressionVisible = false
         animationSpeed = 1.0
         isAnimating = true
         xRange = initialRange
@@ -1063,6 +1095,7 @@ struct FunctionCanvas: View {
     let animationSpeed: Double
     let expression: MathEngine?
     let comparisonExpression: MathEngine?
+    let additionalExpression: MathEngine?
     let zeroes: [Double]
     let yIntercept: Double?
     let quadraticAnalysis: QuadraticAnalysis?
@@ -1338,7 +1371,25 @@ struct FunctionCanvas: View {
                     style: StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round)
                 )
 
-                // Draw the comparison function in green.
+                // Draw the additional custom function in purple.
+            if let additionalExpression {
+                var additionalPath = Path()
+                var penDown = false
+                var previousY: Double?
+                for i in 0...samples {
+                    let x = xRange.lowerBound + Double(i) / Double(samples) * (xRange.upperBound - xRange.lowerBound)
+                    guard let y = additionalExpression.value(x), y >= yRange.lowerBound - 2, y <= yRange.upperBound + 2 else {
+                        penDown = false; previousY = nil; continue
+                    }
+                    let p = point(x, y)
+                    let jump = previousY.map { abs(y - $0) > jumpThreshold } ?? false
+                    if penDown && !jump { additionalPath.addLine(to: p) } else { additionalPath.move(to: p) }
+                    penDown = true; previousY = y
+                }
+                context.stroke(additionalPath, with: .color(.purple), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+            }
+
+            // Draw the comparison function in green.
             if let comparisonExpression {
                 var comparisonPath = Path()
                 var penDown = false
