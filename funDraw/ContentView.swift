@@ -1670,7 +1670,7 @@ private struct LayerCubePlacement {
 }
 
 private struct ObjectObserverView: View {
-    @State private var shape: ObserverShape = .cube
+    @State private var shape: ObserverShape = .layeredCubes
     // Default to a Rubik's-cube-like 3 × 3 × 3 arrangement.
     @State private var layerCubes: [[LayerCube]] = (0..<3).map { _ in
         (0..<9).map { index in LayerCube(row: index / 3, column: index % 3) }
