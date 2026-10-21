@@ -63,7 +63,7 @@ struct ContentView: View {
     @State private var expression = "y = 2x + 1"
 
     private var parsedExpression: MathEngine? {
-        MathExpression(expression: expression)
+        MathEngine(expression: expression)
     }
 
     @State private var xRange: ClosedRange<Double> = -10.0...10.0
@@ -121,7 +121,7 @@ struct ContentView: View {
                             Text("当前范围内未检测到零点")
                                 .font(.subheadline)
                         } else {
-                            Text(detectedZeros.map { "((String(format: "%.4g", $0)), 0)" }.joined(separator: "、"))
+                            Text(detectedZeros.map { "(\\(String(format: "%.4g", $0)), 0)" }.joined(separator: "、"))
                                 .font(.subheadline.monospaced())
                                 .textSelection(.enabled)
                         }
@@ -129,7 +129,7 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         if let intercept = yIntercept {
-                            Text("(0, (String(format: "%.4g", intercept)))")
+                            Text("(0, \\(String(format: "%.4g", intercept)))")
                                 .font(.subheadline.monospaced())
                                 .textSelection(.enabled)
                         } else {
@@ -477,7 +477,7 @@ struct FunctionCanvas: View {
     let settings: [FunctionKind: FunctionSettings]
     let time: Double
     let animationSpeed: Double
-    let expression: MathExpression?
+    let expression: MathEngine?
     let xRange: ClosedRange<Double>
     let yRange: ClosedRange<Double>
 
