@@ -387,7 +387,7 @@ struct ContentView: View {
                                     yRange: yRange
                                 )
                             }
-                            .frame(height: horizontalSizeClass == .compact ? 360 : 500)
+                            .frame(height: horizontalSizeClass == .compact ? 300 : 380)
                             .background(Color(uiColor: .secondarySystemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             // 在图表上双指捏合，即可同时缩放坐标轴和所有函数曲线
