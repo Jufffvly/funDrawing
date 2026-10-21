@@ -1813,7 +1813,7 @@ private struct ObjectObserverView: View {
 
     private func gridSide(for cubes: [LayerCube]) -> Int {
         let largestCoordinate = cubes.reduce(0) { current, cube in
-            max(current, cube.row + 1, cube.column + 1)
+            max(max(current, cube.row + 1), cube.column + 1)
         }
         return max(Int(ceil(sqrt(Double(max(cubes.count, 1))))), largestCoordinate, 1)
     }
