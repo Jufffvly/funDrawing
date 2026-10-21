@@ -353,7 +353,7 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("函数绘图")
                                     .font(.title2.bold())
-                                Text("二次函数 y = ax² + bx + c")
+                                Text("六种函数 · 参数实时可调")
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
