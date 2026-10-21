@@ -1636,6 +1636,7 @@ struct FunctionCanvas: View {
 
 private enum ObserverShape: String, CaseIterable, Identifiable, Equatable {
     case cube = "立方体"
+    case layeredCubes = "多层正方体"
     case cylinder = "圆柱体"
     case cone = "圆锥体"
     case sphere = "球体"
@@ -1656,6 +1657,7 @@ private struct ProjectedTriangle {
 
 private struct ObjectObserverView: View {
     @State private var shape: ObserverShape = .cube
+    @State private var layerCubeCounts: [Int] = [3, 2, 4]
     @State private var yaw: Double = 0
     @State private var pitch: Double = 0.22
     @State private var dragStartYaw: Double = 0
@@ -1668,8 +1670,12 @@ private struct ObjectObserverView: View {
                     Text(item.rawValue).tag(item)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .padding(.horizontal)
+
+            if shape == .layeredCubes {
+                layeredCubeControls
+            }
 
             GeometryReader { geometry in
                 ZStack {
@@ -1679,7 +1685,16 @@ private struct ObjectObserverView: View {
                         let triangles = makeTriangles(for: shape)
                         let projected = triangles.map { triangle -> ProjectedTriangle in
                             let points3D = [triangle.a, triangle.b, triangle.c].map(rotate)
-                            let scale = min(size.width, size.height) * 0.31
+                            let scale: Double = {
+                                guard shape == .layeredCubes else {
+                                    return min(size.width, size.height) * 0.31
+                                }
+                                let widestLayer = Double(max(layerCubeCounts.max() ?? 1, 1)) * 1.05
+                                let totalHeight = Double(max(layerCubeCounts.count, 1)) * 1.05
+                                let totalDepth = Double(max(layerCubeCounts.count, 1)) * 0.65
+                                return min(size.width / (widestLayer + totalDepth),
+                                           size.height / max(totalHeight, totalDepth)) * 0.82
+                            }()
                             let points2D = points3D.map { p in
                                 CGPoint(x: size.width / 2 + p.x * scale,
                                         y: size.height / 2 - p.y * scale)
@@ -1743,7 +1758,9 @@ private struct ObjectObserverView: View {
             }
             .padding(.horizontal)
 
-            Text("在模型区域拖动即可自由旋转；选择不同物体可切换几何模型。")
+            Text(shape == .layeredCubes
+                 ? "拖动模型可从不同角度观察各层正方体形成的平面轮廓；可调整层数及每层数量。"
+                 : "在模型区域拖动即可自由旋转；选择不同物体可切换几何模型。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1756,6 +1773,55 @@ private struct ObjectObserverView: View {
         .onChange(of: shape) { _ in
             setView(yaw: 0, pitch: 0.22)
         }
+    }
+
+    private var layeredCubeControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("层数：\(layerCubeCounts.count)")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button {
+                    guard layerCubeCounts.count < 8 else { return }
+                    layerCubeCounts.append(3)
+                } label: {
+                    Label("增加一层", systemImage: "plus")
+                }
+                .disabled(layerCubeCounts.count >= 8)
+                Button {
+                    guard layerCubeCounts.count > 1 else { return }
+                    layerCubeCounts.removeLast()
+                } label: {
+                    Image(systemName: "minus.circle")
+                }
+                .disabled(layerCubeCounts.count <= 1)
+                .accessibilityLabel("减少一层")
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(layerCubeCounts.indices, id: \.self) { index in
+                        VStack(spacing: 5) {
+                            Text("第\(index + 1)层")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Stepper(value: $layerCubeCounts[index], in: 1...8) {
+                                Text("\(layerCubeCounts[index]) 个")
+                                    .font(.subheadline.monospacedDigit())
+                                    .frame(minWidth: 48)
+                            }
+                            .fixedSize()
+                        }
+                        .padding(10)
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
+            Text("每层数量可独立调整（1–8 个），最多 8 层。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal)
     }
 
     private func viewButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -1789,17 +1855,41 @@ private struct ObjectObserverView: View {
             result.append(ObserverTriangle(a: a, b: b, c: c))
         }
 
-        switch shape {
-        case .cube:
+        func addCube(center: SIMD3<Double>, half: Double) {
             let v: [SIMD3<Double>] = [
-                SIMD3(-1,-1,-1), SIMD3(1,-1,-1), SIMD3(1,1,-1), SIMD3(-1,1,-1),
-                SIMD3(-1,-1,1), SIMD3(1,-1,1), SIMD3(1,1,1), SIMD3(-1,1,1)
+                SIMD3(center.x - half, center.y - half, center.z - half),
+                SIMD3(center.x + half, center.y - half, center.z - half),
+                SIMD3(center.x + half, center.y + half, center.z - half),
+                SIMD3(center.x - half, center.y + half, center.z - half),
+                SIMD3(center.x - half, center.y - half, center.z + half),
+                SIMD3(center.x + half, center.y - half, center.z + half),
+                SIMD3(center.x + half, center.y + half, center.z + half),
+                SIMD3(center.x - half, center.y + half, center.z + half)
             ]
             let faces = [[0,1,2,3], [4,7,6,5], [0,4,5,1],
                          [3,2,6,7], [0,3,7,4], [1,5,6,2]]
-            for f in faces {
-                add(v[f[0]], v[f[1]], v[f[2]])
-                add(v[f[0]], v[f[2]], v[f[3]])
+            for face in faces {
+                add(v[face[0]], v[face[1]], v[face[2]])
+                add(v[face[0]], v[face[2]], v[face[3]])
+            }
+        }
+
+        switch shape {
+        case .cube:
+            addCube(center: SIMD3<Double>(0, 0, 0), half: 1)
+        case .layeredCubes:
+            let half = 0.46
+            let spacing = 0.96
+            let layerCount = layerCubeCounts.count
+            for (layer, count) in layerCubeCounts.enumerated() {
+                let centeredLayer = Double(layer) - Double(layerCount - 1) / 2
+                let centerY = centeredLayer * spacing
+                // Slightly offset each layer in depth so the top view also reveals a pattern.
+                let centerZ = centeredLayer * spacing * 0.6
+                for cube in 0..<count {
+                    let centerX = (Double(cube) - Double(count - 1) / 2) * spacing
+                    addCube(center: SIMD3<Double>(centerX, centerY, centerZ), half: half)
+                }
             }
         case .cylinder, .cone:
             let segments = 36
