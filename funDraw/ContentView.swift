@@ -1742,20 +1742,28 @@ private struct ObjectObserverView: View {
                             }
                     )
                     .simultaneousGesture(
-                        SpatialTapGesture(count: 1).onEnded { value in
-                            guard shape == .layeredCubes else { return }
-                            let canvasSize = CGSize(width: max(geometry.size.width - 16, 1),
-                                                    height: max(geometry.size.height - 16, 1))
-                            removeCube(at: value.location, canvasSize: canvasSize)
-                        }
-                    )
-                    .simultaneousGesture(
-                        SpatialTapGesture(count: 2).onEnded { value in
-                            guard shape == .layeredCubes else { return }
-                            let canvasSize = CGSize(width: max(geometry.size.width - 16, 1),
-                                                    height: max(geometry.size.height - 16, 1))
-                            addCube(at: value.location, canvasSize: canvasSize)
-                        }
+                        SpatialTapGesture(count: 2)
+                            .exclusively(before: SpatialTapGesture(count: 1))
+                            .onEnded { result in
+                                guard shape == .layeredCubes else { return }
+                                let location: CGPoint
+                                let isDoubleTap: Bool
+                                switch result {
+                                case .first(let tap):
+                                    location = tap.location
+                                    isDoubleTap = true
+                                case .second(let tap):
+                                    location = tap.location
+                                    isDoubleTap = false
+                                }
+                                let canvasSize = CGSize(width: max(geometry.size.width - 16, 1),
+                                                        height: max(geometry.size.height - 16, 1))
+                                if isDoubleTap {
+                                    addCube(at: location, canvasSize: canvasSize)
+                                } else {
+                                    removeCube(at: location, canvasSize: canvasSize)
+                                }
+                            }
                     )
                 }
             }
@@ -1844,7 +1852,7 @@ private struct ObjectObserverView: View {
         guard let nearest = candidates.min(by: { $0.1 < $1.1 }),
               nearest.1 < max(CGFloat(scale * 0.62), 16),
               layerCubes.indices.contains(nearest.0.layer),
-              layerCubes[nearest.0.layer].count > 1 else { return }
+              layerCubes[nearest.0.layer].count > 0 else { return }
         layerCubes[nearest.0.layer].removeAll { $0.id == nearest.0.id }
     }
 
@@ -1952,12 +1960,12 @@ private struct ObjectObserverView: View {
                                 .font(.subheadline.monospacedDigit())
                             HStack(spacing: 8) {
                                 Button {
-                                    guard layerCubes[index].count > 1 else { return }
+                                    guard layerCubes[index].count > 0 else { return }
                                     layerCubes[index].removeLast()
                                 } label: {
                                     Image(systemName: "minus.circle")
                                 }
-                                .disabled(layerCubes[index].count <= 1)
+                                .disabled(layerCubes[index].count == 0)
                                 Button {
                                     addCube(toLayer: index)
                                 } label: {
