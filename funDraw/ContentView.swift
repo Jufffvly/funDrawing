@@ -465,7 +465,7 @@ struct ContentView: View {
                     }
                 ))
                 .labelsHidden()
-                .accessibilityLabel("显示\\(kind.rawValue)")
+                .accessibilityLabel("显示\(kind.rawValue)")
             }
 
             Text(kind.formula)
