@@ -85,6 +85,11 @@ final class MathEngineTests: XCTestCase {
         XCTAssertNil(MathEngine(expression: "2x + 1").quadraticAnalysis)
     }
 
+    func testCoincidentFunctionsDoNotProduceThousandsOfIntersections() throws {
+        let first = try XCTUnwrap(MathEngine(expression: "x^2 + 1"))
+        XCTAssertTrue(first.approximateIntersections(in: -5...5, withFunction: { x in x * x + 1 }).isEmpty)
+    }
+
     func testTangentRootsAndTangentialIntersections() throws {
         let fourthPower = try XCTUnwrap(MathEngine(expression: "x^4"))
         XCTAssertTrue(fourthPower.approximateZeros(in: -1.3...2.1).contains { abs($0) < 1e-4 })
