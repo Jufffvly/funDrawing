@@ -1,7 +1,32 @@
 // MathEngine.swift — safe expression parsing, evaluation, and numerical analysis
 
+struct QuadraticAnalysis {
+    let a: Double
+    let b: Double
+    let c: Double
+    let vertexX: Double
+    let vertexY: Double
+    let axisOfSymmetry: Double
+    let discriminant: Double
+}
+
 struct MathEngine {
     private let root: Node
+
+    /// Exact coefficient extraction for expressions that simplify to a polynomial of degree <= 2.
+    var quadraticAnalysis: QuadraticAnalysis? {
+        guard let coefficients = root.polynomialCoefficients, coefficients.count <= 3 else { return nil }
+        let c = coefficients.indices.contains(0) ? coefficients[0] : 0
+        let b = coefficients.indices.contains(1) ? coefficients[1] : 0
+        let a = coefficients.indices.contains(2) ? coefficients[2] : 0
+        guard a.isFinite, b.isFinite, c.isFinite, abs(a) > 1e-12 else { return nil }
+        let vx = -b / (2 * a)
+        let vy = c - (b * b) / (4 * a)
+        let d = b * b - 4 * a * c
+        guard vx.isFinite, vy.isFinite, d.isFinite else { return nil }
+        return QuadraticAnalysis(a: a, b: b, c: c, vertexX: vx, vertexY: vy,
+                                 axisOfSymmetry: vx, discriminant: d)
+    }
 
     init?(expression: String) {
         guard let normalized = Self.normalize(expression) else { return nil }
@@ -108,11 +133,142 @@ struct MathEngine {
         return unique
     }
 
+    /// Finds approximate intersections between this function and another sampled function.
+    /// The supplied closure returns nil outside the other function's domain.
+    func approximateIntersections(
+        in range: ClosedRange<Double>,
+        withFunction otherValue: (Double) -> Double?,
+        samples: Int = 1200
+    ) -> [Double] {
+        guard range.lowerBound.isFinite, range.upperBound.isFinite,
+              range.lowerBound < range.upperBound else { return [] }
+        let count = min(max(samples, 16), 10000)
+        let step = (range.upperBound - range.lowerBound) / Double(count)
+        guard step.isFinite, step > 0 else { return [] }
+        func difference(_ x: Double) -> Double? {
+            guard let a = value(x), let b = otherValue(x) else { return nil }
+            let d = a - b
+            return d.isFinite ? d : nil
+        }
+        var xs: [Double] = []
+        var ys: [Double?] = []
+        for i in 0...count {
+            let x = range.lowerBound + Double(i) * step
+            xs.append(x)
+            ys.append(difference(x))
+        }
+        var roots: [Double] = []
+        for i in 1...count {
+            guard let left = ys[i - 1], let right = ys[i] else { continue }
+            if abs(left) < 1e-9 { roots.append(xs[i - 1]); continue }
+            guard (left < 0 && right > 0) || (left > 0 && right < 0) else { continue }
+            var lo = xs[i - 1], hi = xs[i], flo = left
+            for _ in 0..<64 {
+                let mid = lo + (hi - lo) / 2
+                guard let fm = difference(mid) else { break }
+                if abs(fm) < 1e-10 || abs(hi - lo) < 1e-9 { lo = mid; hi = mid; break }
+                if (flo < 0 && fm > 0) || (flo > 0 && fm < 0) {
+                    hi = mid
+                } else {
+                    lo = mid
+                    flo = fm
+                }
+            }
+            roots.append(lo + (hi - lo) / 2)
+        }
+
+        // Minimize |f-g| near sampled local minima to catch tangential intersections.
+        if xs.count >= 3 {
+            for i in 1..<(xs.count - 1) {
+                guard let l = ys[i - 1], let m = ys[i], let r = ys[i + 1],
+                      abs(m) <= abs(l), abs(m) <= abs(r) else { continue }
+                var lo = xs[i - 1], hi = xs[i + 1]
+                for _ in 0..<48 {
+                    let p = lo + (hi - lo) / 3
+                    let q = hi - (hi - lo) / 3
+                    guard let yp = difference(p), let yq = difference(q) else { break }
+                    if abs(yp) <= abs(yq) { hi = q } else { lo = p }
+                }
+                let x = lo + (hi - lo) / 2
+                if let residual = difference(x),
+                   abs(residual) < 1e-7 * max(1, abs(m), abs(l), abs(r)) {
+                    roots.append(x)
+                }
+            }
+        }
+        roots.sort()
+        var unique: [Double] = []
+        for root in roots where root.isFinite {
+            if let last = unique.last, abs(root - last) < max(step * 0.35, 1e-6) { continue }
+            unique.append(root)
+        }
+        return unique
+    }
+
     private indirect enum Node {
         case number(Double), variable
         case unary(Character, Node)
         case binary(Character, Node, Node)
         case function(String, Node)
+
+        /// Polynomial coefficients in ascending powers: [c, b, a].
+        var polynomialCoefficients: [Double]? {
+            switch self {
+            case .number(let value):
+                return value.isFinite ? [value] : nil
+            case .variable:
+                return [0, 1]
+            case .unary(let op, let node):
+                guard var values = node.polynomialCoefficients else { return nil }
+                if op == "-" { values = values.map { -$0 } }
+                return values
+            case .function:
+                return nil
+            case .binary(let op, let lhs, let rhs):
+                guard let a = lhs.polynomialCoefficients,
+                      let b = rhs.polynomialCoefficients else { return nil }
+                switch op {
+                case "+", "-":
+                    let count = max(a.count, b.count)
+                    var result = Array(repeating: 0.0, count: count)
+                    for i in 0..<count {
+                        let av = i < a.count ? a[i] : 0
+                        let bv = i < b.count ? b[i] : 0
+                        result[i] = op == "+" ? av + bv : av - bv
+                    }
+                    return result.allSatisfy(\.isFinite) ? result : nil
+                case "*":
+                    guard a.count + b.count - 2 <= 2 else { return nil }
+                    var result = Array(repeating: 0.0, count: a.count + b.count - 1)
+                    for i in a.indices {
+                        for j in b.indices {
+                            result[i + j] += a[i] * b[j]
+                        }
+                    }
+                    return result.allSatisfy(\.isFinite) ? result : nil
+                case "/":
+                    guard b.count == 1, b[0] != 0 else { return nil }
+                    let result = a.map { $0 / b[0] }
+                    return result.allSatisfy(\.isFinite) ? result : nil
+                case "^":
+                    guard b.count == 1, b[0].isFinite,
+                          b[0] >= 0, b[0] <= 2, b[0].rounded() == b[0] else { return nil }
+                    let exponent = Int(b[0])
+                    if exponent == 0 { return [1] }
+                    if exponent == 1 { return a }
+                    guard a.count + a.count - 2 <= 2 else { return nil }
+                    var result = Array(repeating: 0.0, count: a.count * 2 - 1)
+                    for i in a.indices {
+                        for j in a.indices {
+                            result[i + j] += a[i] * a[j]
+                        }
+                    }
+                    return result.allSatisfy(\.isFinite) ? result : nil
+                default:
+                    return nil
+                }
+            }
+        }
 
         func evaluate(_ x: Double) -> Double {
             switch self {
