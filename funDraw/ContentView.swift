@@ -105,6 +105,12 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showingControls = false
     @State private var selectedFunctionIndex = 2
+    @FocusState private var focusedExpressionField: ExpressionField?
+
+    private enum ExpressionField: Hashable {
+        case custom
+        case comparison
+    }
 
     var body: some View {
         Group {
@@ -441,8 +447,16 @@ struct ContentView: View {
             }
             .frame(maxHeight: .infinity)
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("收起键盘") {
+                    focusedExpressionField = nil
+                }
+            }
+        }
         .navigationTitle("函数坐标系")
-                    .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline)
         
     }
 
@@ -473,6 +487,9 @@ struct ContentView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.system(.body, design: .monospaced))
+                .focused($focusedExpressionField, equals: .custom)
+                .submitLabel(.done)
+                .onSubmit { focusedExpressionField = nil }
 
             Label(
                 parsedExpression == nil ? "表达式无效，请检查输入" : "表达式有效，曲线会实时更新",
@@ -490,6 +507,9 @@ struct ContentView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
+                    .focused($focusedExpressionField, equals: .comparison)
+                    .submitLabel(.done)
+                    .onSubmit { focusedExpressionField = nil }
                 Text(parsedComparisonExpression == nil ? "比较函数表达式无效" : "比较曲线以绿色显示")
                     .font(.caption2)
                     .foregroundStyle(parsedComparisonExpression == nil ? .orange : .secondary)
@@ -502,6 +522,7 @@ struct ContentView: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(Color(uiColor: .secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
