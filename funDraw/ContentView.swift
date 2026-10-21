@@ -1939,7 +1939,7 @@ private struct ObjectObserverView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         isLayersSeparated.toggle()
@@ -1948,6 +1948,8 @@ private struct ObjectObserverView: View {
                     Label(isLayersSeparated ? "合并显示" : "分层编辑", systemImage: "square.3.layers.3d")
                 }
                 .buttonStyle(.borderedProminent)
+            }
+            HStack(spacing: 10) {
                 Button {
                     guard layerCubes.count < 8 else { return }
                     layerCubes.append((0..<9).map { index in
@@ -1961,10 +1963,9 @@ private struct ObjectObserverView: View {
                     guard layerCubes.count > 1 else { return }
                     layerCubes.removeLast()
                 } label: {
-                    Image(systemName: "minus.circle")
+                    Label("减少一层", systemImage: "minus")
                 }
                 .disabled(layerCubes.count <= 1)
-                .accessibilityLabel("减少一层")
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
