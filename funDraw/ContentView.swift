@@ -1654,6 +1654,7 @@ private struct ObserverTriangle {
 private struct ProjectedTriangle {
     let points: [CGPoint]
     let depth: Double
+    let color: Color?
 }
 
 private struct ObjectObserverView: View {
@@ -1684,25 +1685,15 @@ private struct ObjectObserverView: View {
                         .fill(Color(uiColor: .secondarySystemBackground))
                     Canvas { context, size in
                         let triangles = makeTriangles(for: shape)
-                        let projected = triangles.map { triangle -> ProjectedTriangle in
-                            let points3D = [triangle.a, triangle.b, triangle.c].map(rotate)
-                            let scale: Double = {
-                                guard shape == .layeredCubes else {
-                                    return min(size.width, size.height) * 0.31
-                                }
-                                let widestLayer = Double(max(layerCubeCounts.max() ?? 1, 1)) * 1.05
-                                let totalHeight = Double(max(layerCubeCounts.count, 1)) * 1.05
-                                let totalDepth = Double(max(layerCubeCounts.count, 1)) * 0.65
-                                return min(size.width / (widestLayer + totalDepth),
-                                           size.height / max(totalHeight, totalDepth)) * 0.82
-                            }()
-                            let points2D = points3D.map { p in
-                                CGPoint(x: size.width / 2 + p.x * scale,
-                                        y: size.height / 2 - p.y * scale)
-                            }
-                            return ProjectedTriangle(points: points2D,
-                                                     depth: points3D.map(\.z).reduce(0, +) / 3)
-                        }.sorted { $0.depth < $1.depth }
+                        let scale = projectionScale(in: size)
+                        var projected: [ProjectedTriangle] = []
+                        projected.reserveCapacity(triangles.count)
+                        for triangle in triangles {
+                            projected.append(projectTriangle(triangle, scale: scale, in: size))
+                        }
+                        projected.sort { left, right in
+                            left.depth < right.depth
+                        }
 
                         for triangle in projected {
                             guard triangle.points.count == 3 else { continue }
@@ -1778,6 +1769,42 @@ private struct ObjectObserverView: View {
         .onChange(of: shape) { _ in
             setView(yaw: 0, pitch: 0.22)
         }
+    }
+
+    private func projectionScale(in size: CGSize) -> Double {
+        guard shape == .layeredCubes else {
+            return Double(min(size.width, size.height)) * 0.31
+        }
+
+        let widestLayer = Double(max(layerCubeCounts.max() ?? 1, 1)) * 1.05
+        let totalHeight = Double(max(layerCubeCounts.count, 1)) * 1.05
+        let totalDepth = Double(max(layerCubeCounts.count, 1)) * 0.65
+        let widthScale = Double(size.width) / (widestLayer + totalDepth)
+        let heightScale = Double(size.height) / max(totalHeight, totalDepth)
+        return min(widthScale, heightScale) * 0.82
+    }
+
+    private func projectTriangle(
+        _ triangle: ObserverTriangle,
+        scale: Double,
+        in size: CGSize
+    ) -> ProjectedTriangle {
+        let pointA = rotate(triangle.a)
+        let pointB = rotate(triangle.b)
+        let pointC = rotate(triangle.c)
+
+        let centerX = Double(size.width) / 2
+        let centerY = Double(size.height) / 2
+        let projectedA = CGPoint(x: centerX + pointA.x * scale, y: centerY - pointA.y * scale)
+        let projectedB = CGPoint(x: centerX + pointB.x * scale, y: centerY - pointB.y * scale)
+        let projectedC = CGPoint(x: centerX + pointC.x * scale, y: centerY - pointC.y * scale)
+        let averageDepth = (pointA.z + pointB.z + pointC.z) / 3
+
+        return ProjectedTriangle(
+            points: [projectedA, projectedB, projectedC],
+            depth: averageDepth,
+            color: triangle.color
+        )
     }
 
     private var layeredCubeControls: some View {
