@@ -347,7 +347,7 @@ struct ContentView: View {
     }
 
     private var graphPanel: some View {
-        return ScrollView(.vertical) {
+        return VStack(spacing: 10) {
             VStack(spacing: 10) {
                         HStack(alignment: .center, spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
@@ -415,10 +415,30 @@ struct ContentView: View {
                                     }
                             )
 
-                        functionParameterControls
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .top)
+
+            Divider()
+
+            HStack {
+                Text("函数参数调节")
+                    .font(.headline)
+                Spacer()
+                Text("滑动调参，曲线实时更新")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 2)
+
+            // 独立滚动参数区：滚动时坐标系保持固定可见。
+            ScrollView(.vertical) {
+                functionParameterControls
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+            }
+            .frame(maxHeight: .infinity)
         }
         .navigationTitle("函数坐标系")
                     .navigationBarTitleDisplayMode(.inline)
