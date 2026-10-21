@@ -60,6 +60,11 @@ struct ContentView: View {
 
     @State private var isAnimating = true
     @State private var animationSpeed = 1.0
+    @State private var expression = "y = 2x + 1"
+
+    private var parsedExpression: MathExpression? {
+        MathExpression(expression: expression)
+    }
 
     @State private var xRange: ClosedRange<Double> = -10.0...10.0
     @State private var yRange: ClosedRange<Double> = -10.0...10.0
@@ -79,6 +84,32 @@ struct ContentView: View {
                         .font(.title2.bold())
                         .frame(maxWidth: .infinity, alignment: .leading)
 
+                    // Arbitrary function expression input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("任意函数输入")
+                            .font(.headline)
+                        TextField("例如：y = x^2 - 4", text: $expression)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.system(.body, design: .monospaced))
+                        if parsedExpression != nil {
+                            Label("表达式有效，蓝色曲线实时更新", systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        } else {
+                            Label("表达式无效或不完整，请检查运算符、括号和函数名", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                        Text("支持 x、数字、括号、+ − × ÷、幂运算、隐式乘法（2x、2(x+1)）及 sin、cos、tan、abs、sqrt、exp、ln、log、pi、e。")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
                     // Graph
                     TimelineView(
                         .animation(
@@ -91,6 +122,7 @@ struct ContentView: View {
                             time: timeline.date
                                 .timeIntervalSinceReferenceDate,
                             animationSpeed: animationSpeed,
+                            expression: parsedExpression,
                             xRange: xRange,
                             yRange: yRange
                         )
@@ -408,6 +440,7 @@ struct FunctionCanvas: View {
     let settings: [FunctionKind: FunctionSettings]
     let time: Double
     let animationSpeed: Double
+    let expression: MathExpression?
     let xRange: ClosedRange<Double>
     let yRange: ClosedRange<Double>
 
@@ -647,9 +680,206 @@ struct FunctionCanvas: View {
                     )
                 )
             }
+
+            // Draw the user-entered expression in blue, using the same coordinate
+            // transform and discontinuity safeguards as the built-in functions.
+            if let expression {
+                var curve = Path()
+                var penDown = false
+                var previousY: Double?
+
+                for i in 0...samples {
+                    let ratio = Double(i) / Double(samples)
+                    let x = xRange.lowerBound + ratio * (xRange.upperBound - xRange.lowerBound)
+                    guard let y = expression.value(x),
+                          y >= yRange.lowerBound - 2,
+                          y <= yRange.upperBound + 2 else {
+                        penDown = false
+                        previousY = nil
+                        continue
+                    }
+
+                    let p = point(x, y)
+                    let isLargeJump = previousY.map { abs(y - $0) > jumpThreshold } ?? false
+                    if penDown && !isLargeJump {
+                        curve.addLine(to: p)
+                    } else {
+                        curve.move(to: p)
+                    }
+                    penDown = true
+                    previousY = y
+                }
+
+                context.stroke(
+                    curve,
+                    with: .color(.blue),
+                    style: StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round)
+                )
+            }
         }
     }
 }
+
+// MARK: - Safe Math Expression Parser
+
+private struct MathExpression {
+    private let root: Node
+
+    init?(expression: String) {
+        guard let normalized = Self.normalize(expression) else { return nil }
+        var parser = Parser(source: normalized)
+        guard let node = parser.parse(), parser.isAtEnd else { return nil }
+        root = node
+    }
+
+    static func normalize(_ input: String) -> String? {
+        var text = input.lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "×", with: "*")
+            .replacingOccurrences(of: "÷", with: "/")
+            .replacingOccurrences(of: "−", with: "-")
+            .replacingOccurrences(of: "²", with: "^2")
+            .replacingOccurrences(of: "³", with: "^3")
+        if text.hasPrefix("y=") { text = String(text.dropFirst(2)) }
+        return text.isEmpty ? nil : text
+    }
+
+    func value(_ x: Double) -> Double? {
+        let result = root.evaluate(x)
+        return result.isFinite ? result : nil
+    }
+
+    private indirect enum Node {
+        case number(Double), variable
+        case unary(Character, Node)
+        case binary(Character, Node, Node)
+        case function(String, Node)
+
+        func evaluate(_ x: Double) -> Double {
+            switch self {
+            case .number(let value): return value
+            case .variable: return x
+            case .unary(let op, let node): return op == "-" ? -node.evaluate(x) : node.evaluate(x)
+            case .binary(let op, let left, let right):
+                let a = left.evaluate(x), b = right.evaluate(x)
+                switch op {
+                case "+": return a + b
+                case "-": return a - b
+                case "*": return a * b
+                case "/": return b == 0 ? .nan : a / b
+                case "^": return pow(a, b)
+                default: return .nan
+                }
+            case .function(let name, let node):
+                let value = node.evaluate(x)
+                switch name {
+                case "sin": return sin(value)
+                case "cos": return cos(value)
+                case "tan": return tan(value)
+                case "abs": return abs(value)
+                case "sqrt": return value < 0 ? .nan : sqrt(value)
+                case "exp": return exp(value)
+                case "ln": return value <= 0 ? .nan : log(value)
+                case "log": return value <= 0 ? .nan : log10(value)
+                default: return .nan
+                }
+            }
+        }
+    }
+
+    private struct Parser {
+        private let characters: [Character]
+        private var index = 0
+        var isAtEnd: Bool { index == characters.count }
+
+        init(source: String) { characters = Array(source) }
+
+        mutating func parse() -> Node? { parseAddition() }
+
+        private mutating func parseAddition() -> Node? {
+            guard var node = parseMultiplication() else { return nil }
+            while let op = peek, op == "+" || op == "-" {
+                index += 1
+                guard let rhs = parseMultiplication() else { return nil }
+                node = .binary(op, node, rhs)
+            }
+            return node
+        }
+
+        private mutating func parseMultiplication() -> Node? {
+            guard var node = parsePower() else { return nil }
+            while let op = peek, op == "*" || op == "/" {
+                index += 1
+                guard let rhs = parsePower() else { return nil }
+                node = .binary(op, node, rhs)
+            }
+            // Accept conventional school notation such as 2x, 3(x + 1), and 2sin(x).
+            while startsImplicitMultiplication {
+                guard let rhs = parsePower() else { return nil }
+                node = .binary("*", node, rhs)
+            }
+            return node
+        }
+
+        private var startsImplicitMultiplication: Bool {
+            guard let char = peek else { return false }
+            return char == "x" || char == "(" || char.isLetter
+        }
+
+        private mutating func parsePower() -> Node? {
+            guard var node = parseUnary() else { return nil }
+            if peek == "^" {
+                index += 1
+                guard let rhs = parsePower() else { return nil }
+                node = .binary("^", node, rhs)
+            }
+            return node
+        }
+
+        private mutating func parseUnary() -> Node? {
+            if peek == "+" { index += 1; return parseUnary() }
+            if peek == "-" {
+                index += 1
+                guard let node = parseUnary() else { return nil }
+                return .unary("-", node)
+            }
+            return parsePrimary()
+        }
+
+        private mutating func parsePrimary() -> Node? {
+            guard let char = peek else { return nil }
+            if char == "(" {
+                index += 1
+                guard let node = parseAddition(), peek == ")" else { return nil }
+                index += 1
+                return node
+            }
+            if char.isNumber || char == "." {
+                let start = index
+                while let c = peek, c.isNumber || c == "." { index += 1 }
+                return Double(String(characters[start..<index])).map(Node.number)
+            }
+            if char.isLetter {
+                let start = index
+                while let c = peek, c.isLetter { index += 1 }
+                let name = String(characters[start..<index])
+                if name == "x" { return .variable }
+                if name == "pi" { return .number(Double.pi) }
+                if name == "e" { return .number(exp(1)) }
+                let functions: Set<String> = ["sin", "cos", "tan", "abs", "sqrt", "exp", "ln", "log"]
+                guard functions.contains(name), peek == "(" else { return nil }
+                index += 1
+                guard let argument = parseAddition(), peek == ")" else { return nil }
+                index += 1
+                return .function(name, argument)
+            }
+            return nil
+        }
+
+        private var peek: Character? { index < characters.count ? characters[index] : nil }
+    }
+}
+
 
 // MARK: - Preview
 
