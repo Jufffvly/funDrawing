@@ -62,6 +62,7 @@ struct ContentView: View {
     @State private var animationSpeed = 1.0
     @State private var expression = "y = x^2 - 4"
     @State private var comparisonExpression = "y = x"
+    @State private var showingControls = false
 
     private var parsedExpression: MathEngine? {
         MathEngine(expression: expression)
@@ -99,13 +100,98 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
+            VStack(spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("函数绘图")
+                            .font(.title2.bold())
+                        Text(expression)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        showingControls = true
+                    } label: {
+                        Label("操作", systemImage: "slider.horizontal.3")
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityHint("打开函数输入、关键点分析和绘图设置")
+                }
+                .padding(.horizontal, 4)
 
-                    Text("多函数实时绘图")
-                        .font(.title2.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Graph
+                    TimelineView(
+                        .animation(
+                            minimumInterval: 1.0 / 30.0,
+                            paused: !isAnimating
+                        )
+                    ) { timeline in
+                        FunctionCanvas(
+                            settings: settings,
+                            time: timeline.date
+                                .timeIntervalSinceReferenceDate,
+                            animationSpeed: animationSpeed,
+                            expression: parsedExpression,
+                            comparisonExpression: parsedComparisonExpression,
+                            zeroes: detectedZeros,
+                            yIntercept: yIntercept,
+                            quadraticAnalysis: quadraticAnalysis,
+                            intersections: detectedIntersections,
+                            xRange: xRange,
+                            yRange: yRange
+                        )
+                    }
+                    .frame(height: 500)
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    // 在图表上双指捏合，即可同时缩放坐标轴和所有函数曲线
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                let scale = Double(value)
+                                guard scale > 0 else { return }
 
+                                let centerX = (baseXRange.lowerBound + baseXRange.upperBound) / 2
+                                let centerY = (baseYRange.lowerBound + baseYRange.upperBound) / 2
+                                let halfX = (baseXRange.upperBound - baseXRange.lowerBound) / 2 / scale
+                                let halfY = (baseYRange.upperBound - baseYRange.lowerBound) / 2 / scale
+
+                                // 限制最小/最大可视范围，防止缩放过度
+                                let clampedHalfX = min(max(halfX, 0.05), 500.0)
+                                let clampedHalfY = min(max(halfY, 0.05), 500.0)
+
+                                xRange = (centerX - clampedHalfX)...(centerX + clampedHalfX)
+                                yRange = (centerY - clampedHalfY)...(centerY + clampedHalfY)
+                            }
+                            .onEnded { _ in
+                                baseXRange = xRange
+                                baseYRange = yRange
+                            }
+                    )
+
+
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .navigationTitle("函数坐标系")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingControls = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("打开操作侧边栏")
+                }
+            }
+            .sheet(isPresented: $showingControls) {
+                NavigationStack {
+                    ScrollView {
+                        VStack(spacing: 16) {
                     // Arbitrary function expression input
                     VStack(alignment: .leading, spacing: 8) {
                         Text("任意函数输入")
@@ -213,56 +299,6 @@ struct ContentView: View {
                     .background(Color(uiColor: .secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                    // Graph
-                    TimelineView(
-                        .animation(
-                            minimumInterval: 1.0 / 30.0,
-                            paused: !isAnimating
-                        )
-                    ) { timeline in
-                        FunctionCanvas(
-                            settings: settings,
-                            time: timeline.date
-                                .timeIntervalSinceReferenceDate,
-                            animationSpeed: animationSpeed,
-                            expression: parsedExpression,
-                            comparisonExpression: parsedComparisonExpression,
-                            zeroes: detectedZeros,
-                            yIntercept: yIntercept,
-                            quadraticAnalysis: quadraticAnalysis,
-                            intersections: detectedIntersections,
-                            xRange: xRange,
-                            yRange: yRange
-                        )
-                    }
-                    .frame(height: 360)
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    // 在图表上双指捏合，即可同时缩放坐标轴和所有函数曲线
-                    .gesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                let scale = Double(value)
-                                guard scale > 0 else { return }
-
-                                let centerX = (baseXRange.lowerBound + baseXRange.upperBound) / 2
-                                let centerY = (baseYRange.lowerBound + baseYRange.upperBound) / 2
-                                let halfX = (baseXRange.upperBound - baseXRange.lowerBound) / 2 / scale
-                                let halfY = (baseYRange.upperBound - baseYRange.lowerBound) / 2 / scale
-
-                                // 限制最小/最大可视范围，防止缩放过度
-                                let clampedHalfX = min(max(halfX, 0.05), 500.0)
-                                let clampedHalfY = min(max(halfY, 0.05), 500.0)
-
-                                xRange = (centerX - clampedHalfX)...(centerX + clampedHalfX)
-                                yRange = (centerY - clampedHalfY)...(centerY + clampedHalfY)
-                            }
-                            .onEnded { _ in
-                                baseXRange = xRange
-                                baseYRange = yRange
-                            }
-                    )
-
                     // Main buttons
                     HStack(spacing: 8) {
                         Button {
@@ -324,11 +360,21 @@ struct ContentView: View {
                     .padding()
                     .background(Color(uiColor: .secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                        }
+                        .padding()
+                    }
+                    .navigationTitle("绘图操作")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("完成") {
+                                showingControls = false
+                            }
+                        }
+                    }
                 }
-                .padding()
             }
-            .navigationTitle("Function Lab")
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
