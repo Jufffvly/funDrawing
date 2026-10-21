@@ -446,6 +446,64 @@ struct ContentView: View {
         
     }
 
+    // MARK: - Custom Function Controls
+
+    private var customExpressionControlsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("自定义函数", systemImage: "function")
+                    .font(.headline)
+                Spacer()
+                Toggle("开启", isOn: Binding(
+                    get: { isCustomExpressionVisible },
+                    set: { enabled in
+                        isCustomExpressionVisible = enabled
+                        if !enabled {
+                            isComparisonVisible = false
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("显示自定义函数")
+            }
+
+            TextField("输入函数，例如：y = x^2 - 4", text: $expression)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(.body, design: .monospaced))
+
+            Label(
+                parsedExpression == nil ? "表达式无效，请检查输入" : "表达式有效，曲线会实时更新",
+                systemImage: parsedExpression == nil ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+            )
+            .font(.caption)
+            .foregroundStyle(parsedExpression == nil ? .orange : .green)
+
+            Toggle("显示比较函数", isOn: $isComparisonVisible)
+                .disabled(!isCustomExpressionVisible)
+
+            if isComparisonVisible {
+                TextField("比较函数，例如：y = x", text: $comparisonExpression)
+                    .textFieldStyle(.roundedBorder)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+                Text(parsedComparisonExpression == nil ? "比较函数表达式无效" : "比较曲线以绿色显示")
+                    .font(.caption2)
+                    .foregroundStyle(parsedComparisonExpression == nil ? .orange : .secondary)
+            }
+
+            Text("支持幂运算、括号、隐式乘法及 sin、cos、tan、abs、sqrt、exp、ln、log 等函数。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
     // MARK: - Swipeable Function Parameter Controls
 
     private var functionParameterControls: some View {
@@ -462,7 +520,7 @@ struct ContentView: View {
 
                 Spacer()
 
-                Text("\(selectedFunctionIndex + 1) / \(FunctionKind.allCases.count)")
+                Text("\(selectedFunctionIndex + 1) / \(FunctionKind.allCases.count + 1)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
 
@@ -470,7 +528,7 @@ struct ContentView: View {
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedFunctionIndex = min(FunctionKind.allCases.count - 1, selectedFunctionIndex + 1)
+                        selectedFunctionIndex = min(FunctionKind.allCases.count, selectedFunctionIndex + 1)
                     }
                 } label: {
                     Label("下一个", systemImage: "chevron.right")
@@ -490,6 +548,10 @@ struct ContentView: View {
                     .padding(.horizontal, 2)
                     .tag(index)
                 }
+
+                customExpressionControlsPanel
+                    .padding(.horizontal, 2)
+                    .tag(FunctionKind.allCases.count)
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
             .frame(height: horizontalSizeClass == .compact ? 205 : 225)
