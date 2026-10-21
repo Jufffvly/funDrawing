@@ -191,7 +191,7 @@ struct MathEngine {
                 }
                 let x = lo + (hi - lo) / 2
                 if let residual = difference(x),
-                   abs(residual) < 1e-7 * max(1, abs(m), abs(l), abs(r)) {
+                   abs(residual) < 1e-7 * max(1, max(abs(m), max(abs(l), abs(r)))) {
                     roots.append(x)
                 }
             }
