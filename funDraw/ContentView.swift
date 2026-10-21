@@ -104,6 +104,7 @@ struct ContentView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showingControls = false
+    @State private var selectedFunctionIndex = 2
 
     var body: some View {
         Group {
@@ -387,7 +388,7 @@ struct ContentView: View {
                                     yRange: yRange
                                 )
                             }
-                            .frame(height: horizontalSizeClass == .compact ? 300 : 380)
+                            .frame(height: horizontalSizeClass == .compact ? 390 : 520)
                             .background(Color(uiColor: .secondarySystemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             // 在图表上双指捏合，即可同时缩放坐标轴和所有函数曲线
@@ -445,25 +446,58 @@ struct ContentView: View {
         
     }
 
-    // MARK: - First-screen Function Parameter Controls
+    // MARK: - Swipeable Function Parameter Controls
 
     private var functionParameterControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("函数参数控制")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 8) {
+            HStack {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedFunctionIndex = max(0, selectedFunctionIndex - 1)
+                    }
+                } label: {
+                    Label("上一个", systemImage: "chevron.left")
+                }
+                .disabled(selectedFunctionIndex == 0)
 
-            Text("调整下方参数，曲线会在上方坐标系中实时变化。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Spacer()
 
-            ForEach(FunctionKind.allCases) { kind in
-                if kind == .quadratic {
-                    quadraticControlsPanel(settings[.quadratic] ?? FunctionSettings())
-                } else {
-                    functionParameterPanel(kind)
+                Text("\(selectedFunctionIndex + 1) / \(FunctionKind.allCases.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedFunctionIndex = min(FunctionKind.allCases.count - 1, selectedFunctionIndex + 1)
+                    }
+                } label: {
+                    Label("下一个", systemImage: "chevron.right")
+                }
+                .disabled(selectedFunctionIndex == FunctionKind.allCases.count - 1)
+            }
+
+            TabView(selection: $selectedFunctionIndex) {
+                ForEach(Array(FunctionKind.allCases.enumerated()), id: \.element.id) { index, kind in
+                    Group {
+                        if kind == .quadratic {
+                            quadraticControlsPanel(settings[.quadratic] ?? FunctionSettings())
+                        } else {
+                            functionParameterPanel(kind)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                    .tag(index)
                 }
             }
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .frame(height: horizontalSizeClass == .compact ? 205 : 225)
+
+            Text("左右滑动切换函数；调节参数时，坐标系中的曲线会实时更新。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
     }
 
