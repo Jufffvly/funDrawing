@@ -807,15 +807,15 @@ struct MathExpression {
         }
 
         private mutating func parseMultiplication() -> Node? {
-            guard var node = parsePower() else { return nil }
+            guard var node = parseUnary() else { return nil }
             while let op = peek, op == "*" || op == "/" {
                 index += 1
-                guard let rhs = parsePower() else { return nil }
+                guard let rhs = parseUnary() else { return nil }
                 node = .binary(op, node, rhs)
             }
             // Accept conventional school notation such as 2x, 3(x + 1), and 2sin(x).
             while startsImplicitMultiplication {
-                guard let rhs = parsePower() else { return nil }
+                guard let rhs = parseUnary() else { return nil }
                 node = .binary("*", node, rhs)
             }
             return node
@@ -827,10 +827,11 @@ struct MathExpression {
         }
 
         private mutating func parsePower() -> Node? {
-            guard var node = parseUnary() else { return nil }
+            guard var node = parsePrimary() else { return nil }
             if peek == "^" {
                 index += 1
-                guard let rhs = parsePower() else { return nil }
+                // Parse the exponent as unary so 2^-2 is valid and powers remain right-associative.
+                guard let rhs = parseUnary() else { return nil }
                 node = .binary("^", node, rhs)
             }
             return node
@@ -843,7 +844,7 @@ struct MathExpression {
                 guard let node = parseUnary() else { return nil }
                 return .unary("-", node)
             }
-            return parsePrimary()
+            return parsePower()
         }
 
         private mutating func parsePrimary() -> Node? {
