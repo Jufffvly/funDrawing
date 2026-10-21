@@ -557,8 +557,13 @@ struct FunctionCanvas: View {
                 }
             }
 
-            // Draw all enabled curves
-            let samples = max(Int(size.width * 2), 400)
+            // Draw all enabled curves. Bound the work so unusually large canvases
+            // cannot trigger an unbounded number of evaluations in a single frame.
+            let samples = min(max(Int(size.width * 2), 400), 2400)
+            // A large vertical jump between adjacent samples usually indicates a
+            // discontinuity or a near-vertical asymptote. Break the path instead
+            // of drawing a misleading segment across the graph.
+            let jumpThreshold = max(stepY * 4, (yRange.upperBound - yRange.lowerBound) * 0.35)
 
             for kind in FunctionKind.allCases {
                 let config = settings[kind] ?? FunctionSettings()
@@ -569,6 +574,7 @@ struct FunctionCanvas: View {
 
                 var curve = Path()
                 var penDown = false
+                var previousY: Double?
 
                 for i in 0...samples {
                     let ratio = Double(i) / Double(samples)
@@ -608,19 +614,29 @@ struct FunctionCanvas: View {
                     guard y.isFinite,
                           y >= yRange.lowerBound - 2,
                           y <= yRange.upperBound + 2 else {
+                        // Invalid/out-of-view values terminate the current segment.
                         penDown = false
+                        previousY = nil
                         continue
                     }
 
                     let p = point(x, y)
+                    let isLargeJump: Bool
+                    if let previousY {
+                        isLargeJump = abs(y - previousY) > jumpThreshold
+                    } else {
+                        isLargeJump = false
+                    }
 
-                    if penDown {
+                    if penDown && !isLargeJump {
                         curve.addLine(to: p)
                     } else {
+                        // Start a fresh subpath at discontinuities and after gaps.
                         curve.move(to: p)
                     }
 
                     penDown = true
+                    previousY = y
                 }
 
                 context.stroke(
