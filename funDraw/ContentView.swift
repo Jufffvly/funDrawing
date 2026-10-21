@@ -1049,14 +1049,10 @@ struct FunctionCanvas: View {
 
                     switch kind {
                     case .sine:
-                        y = config.a * sin(
-                            x + config.phase + animationSpeed * time
-                        )
+                        y = config.a * sin(x + config.phase)
 
                     case .cosine:
-                        y = config.a * cos(
-                            x + config.phase + animationSpeed * time
-                        )
+                        y = config.a * cos(x + config.phase)
 
                     case .quadratic:
                         y = config.a * x * x
