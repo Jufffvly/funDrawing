@@ -185,3 +185,14 @@ funDrawing/
 - 更新 README，明确本阶段维护的主文件路径为 `funDraw/ContentView.swift`。
 
 **验证状态：** 已从分支重新读取文件并确认输入 UI、解析器和自定义曲线绘制逻辑均存在；尚未运行 Xcode 编译、模拟器或自动化单元测试。表达式解析目前仍与主视图放在同一文件，后续需抽离为独立 MathEngine 并添加正例、负例和边界测试。
+
+
+## 实施记录（2026-10-21）：MathEngine 与关键点分析
+
+- 将递归下降解析器从 `funDraw/ContentView.swift` 拆到独立的 `funDraw/MathEngine.swift`；视图现在只依赖解析与求值接口。
+- 新增 `approximateZeros(in:samples:)`：在给定可视区间内扫描变号区间并二分细化，同时尝试细化 `|f(x)|` 的局部极小值，以覆盖 `x^2` 这类不穿过 x 轴的切触零点；对结果排序、去重。
+- 输入面板新增关键点分析，显示当前 x 轴范围内的近似零点坐标和 `f(0)`；在图中用蓝色点标记零点、橙色点标记 y 轴交点。
+- 新增 `funDrawTests/MathEngineTests.swift`，覆盖有效表达式、非法输入、优先级/结合性、定义域边界、零点与 y 轴交点。
+- README 已同步模块职责、数值近似限制与测试状态。
+
+**验证状态：** 已通过 GitHub 接口提交文件并回读前的结构检查；尚未执行 Swift/Xcode 编译，也未运行 XCTest。仓库当前未包含完整 Xcode 工程与测试 target，测试源码需要加入相应测试 target 后才能运行。
