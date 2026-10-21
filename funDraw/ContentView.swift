@@ -80,6 +80,14 @@ struct ContentView: View {
         return first.approximateIntersections(in: xRange, withFunction: { second.value($0) })
     }
 
+    private var detectedZeros: [Double] {
+        parsedExpression?.approximateZeros(in: xRange) ?? []
+    }
+
+    private var yIntercept: Double? {
+        parsedExpression?.value(0)
+    }
+
     @State private var xRange: ClosedRange<Double> = -10.0...10.0
     @State private var yRange: ClosedRange<Double> = -10.0...10.0
 
