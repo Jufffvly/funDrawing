@@ -1657,9 +1657,25 @@ private struct ProjectedTriangle {
     let color: Color?
 }
 
+private struct LayerCube: Identifiable {
+    let id = UUID()
+    var row: Int
+    var column: Int
+}
+
+private struct LayerCubePlacement {
+    let id: UUID
+    let layer: Int
+    let center: SIMD3<Double>
+}
+
 private struct ObjectObserverView: View {
     @State private var shape: ObserverShape = .cube
-    @State private var layerCubeCounts: [Int] = [3, 2, 4]
+    @State private var layerCubes: [[LayerCube]] = [
+        (0..<3).map { index in LayerCube(row: index / 2, column: index % 2) },
+        (0..<2).map { index in LayerCube(row: 0, column: index) },
+        (0..<4).map { index in LayerCube(row: index / 2, column: index % 2) }
+    ]
     @State private var yaw: Double = 0
     @State private var pitch: Double = 0.22
     @State private var dragStartYaw: Double = 0
@@ -1725,6 +1741,22 @@ private struct ObjectObserverView: View {
                                 dragStartPitch = pitch
                             }
                     )
+                    .simultaneousGesture(
+                        SpatialTapGesture(count: 1).onEnded { value in
+                            guard shape == .layeredCubes else { return }
+                            let canvasSize = CGSize(width: max(geometry.size.width - 16, 1),
+                                                    height: max(geometry.size.height - 16, 1))
+                            removeCube(at: value.location, canvasSize: canvasSize)
+                        }
+                    )
+                    .simultaneousGesture(
+                        SpatialTapGesture(count: 2).onEnded { value in
+                            guard shape == .layeredCubes else { return }
+                            let canvasSize = CGSize(width: max(geometry.size.width - 16, 1),
+                                                    height: max(geometry.size.height - 16, 1))
+                            addCube(at: value.location, canvasSize: canvasSize)
+                        }
+                    )
                 }
             }
             .frame(minHeight: 280)
@@ -1755,7 +1787,7 @@ private struct ObjectObserverView: View {
             .padding(.horizontal)
 
             Text(shape == .layeredCubes
-                 ? "魔方配色：每个小正方体使用红、橙、黄、绿、蓝、白六色面，黑色缝隙清晰分隔小块。拖动可观察不同角度的组合轮廓。"
+                 ? "每层按接近正方形的网格排列。单击小立方体删除，双击模型区域添加小立方体；拖动可旋转观察。"
                  : "在模型区域拖动即可自由旋转；选择不同物体可切换几何模型。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -1771,16 +1803,96 @@ private struct ObjectObserverView: View {
         }
     }
 
+    private func gridSide(for cubes: [LayerCube]) -> Int {
+        let largestCoordinate = cubes.reduce(0) { current, cube in
+            max(current, cube.row + 1, cube.column + 1)
+        }
+        return max(Int(ceil(sqrt(Double(max(cubes.count, 1))))), largestCoordinate, 1)
+    }
+
+    private func placements() -> [LayerCubePlacement] {
+        let layerCount = layerCubes.count
+        var result: [LayerCubePlacement] = []
+        for (layer, cubes) in layerCubes.enumerated() {
+            let side = gridSide(for: cubes)
+            let centeredLayer = Double(layer) - Double(layerCount - 1) / 2
+            for cube in cubes {
+                let x = (Double(cube.column) - Double(side - 1) / 2) * 0.96
+                let z = (Double(cube.row) - Double(side - 1) / 2) * 0.96
+                result.append(LayerCubePlacement(
+                    id: cube.id,
+                    layer: layer,
+                    center: SIMD3<Double>(x, centeredLayer * 0.96, z)
+                ))
+            }
+        }
+        return result
+    }
+
+    private func projectedCenter(of point: SIMD3<Double>, scale: Double, size: CGSize) -> CGPoint {
+        let rotated = rotate(point)
+        return CGPoint(x: Double(size.width) / 2 + rotated.x * scale,
+                       y: Double(size.height) / 2 - rotated.y * scale)
+    }
+
+    private func removeCube(at location: CGPoint, canvasSize: CGSize) {
+        let scale = projectionScale(in: canvasSize)
+        let candidates = placements().map { placement -> (LayerCubePlacement, CGFloat) in
+            let center = projectedCenter(of: placement.center, scale: scale, size: canvasSize)
+            return (placement, hypot(center.x - location.x, center.y - location.y))
+        }
+        guard let nearest = candidates.min(by: { $0.1 < $1.1 }),
+              nearest.1 < max(CGFloat(scale * 0.62), 16),
+              layerCubes.indices.contains(nearest.0.layer),
+              layerCubes[nearest.0.layer].count > 1 else { return }
+        layerCubes[nearest.0.layer].removeAll { $0.id == nearest.0.id }
+    }
+
+    private func addCube(at location: CGPoint, canvasSize: CGSize) {
+        let scale = projectionScale(in: canvasSize)
+        let targetLayer = placements().map { placement -> (Int, CGFloat) in
+            let center = projectedCenter(of: placement.center, scale: scale, size: canvasSize)
+            return (placement.layer, hypot(center.x - location.x, center.y - location.y))
+        }.min(by: { $0.1 < $1.1 })?.0 ?? max(layerCubes.count - 1, 0)
+        addCube(toLayer: targetLayer)
+    }
+
+    private func addCube(toLayer layer: Int) {
+        guard layerCubes.indices.contains(layer), layerCubes[layer].count < 64 else { return }
+        let side = gridSide(for: layerCubes[layer])
+        var row = 0
+        var column = 0
+        var found = false
+        for candidateRow in 0..<side {
+            for candidateColumn in 0..<side {
+                let occupied = layerCubes[layer].contains {
+                    $0.row == candidateRow && $0.column == candidateColumn
+                }
+                if !occupied {
+                    row = candidateRow
+                    column = candidateColumn
+                    found = true
+                    break
+                }
+            }
+            if found { break }
+        }
+        if !found {
+            row = side
+            column = 0
+        }
+        layerCubes[layer].append(LayerCube(row: row, column: column))
+    }
+
     private func projectionScale(in size: CGSize) -> Double {
         guard shape == .layeredCubes else {
             return Double(min(size.width, size.height)) * 0.31
         }
 
-        let widestLayer = Double(max(layerCubeCounts.max() ?? 1, 1)) * 1.05
-        let totalHeight = Double(max(layerCubeCounts.count, 1)) * 1.05
-        let totalDepth = Double(max(layerCubeCounts.count, 1)) * 0.65
-        let widthScale = Double(size.width) / (widestLayer + totalDepth)
-        let heightScale = Double(size.height) / max(totalHeight, totalDepth)
+        let widestGrid = Double(max(layerCubes.map { gridSide(for: $0) }.max() ?? 1, 1)) * 1.05
+        let totalHeight = Double(max(layerCubes.count, 1)) * 1.05
+        let widthScale = Double(size.width) / widestGrid
+        let heightScale = Double(size.height) / max(totalHeight, widestGrid * 0.82)
         return min(widthScale, heightScale) * 0.82
     }
 
@@ -1810,38 +1922,49 @@ private struct ObjectObserverView: View {
     private var layeredCubeControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("层数：\(layerCubeCounts.count)")
+                Text("层数：\(layerCubes.count) · 总数：\(layerCubes.reduce(0) { $0 + $1.count })")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Button {
-                    guard layerCubeCounts.count < 8 else { return }
-                    layerCubeCounts.append(3)
+                    guard layerCubes.count < 8 else { return }
+                    layerCubes.append([LayerCube(row: 0, column: 0)])
                 } label: {
                     Label("增加一层", systemImage: "plus")
                 }
-                .disabled(layerCubeCounts.count >= 8)
+                .disabled(layerCubes.count >= 8)
                 Button {
-                    guard layerCubeCounts.count > 1 else { return }
-                    layerCubeCounts.removeLast()
+                    guard layerCubes.count > 1 else { return }
+                    layerCubes.removeLast()
                 } label: {
                     Image(systemName: "minus.circle")
                 }
-                .disabled(layerCubeCounts.count <= 1)
+                .disabled(layerCubes.count <= 1)
                 .accessibilityLabel("减少一层")
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(layerCubeCounts.indices, id: \.self) { index in
+                    ForEach(layerCubes.indices, id: \.self) { index in
                         VStack(spacing: 5) {
                             Text("第\(index + 1)层")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Stepper(value: $layerCubeCounts[index], in: 1...8) {
-                                Text("\(layerCubeCounts[index]) 个")
-                                    .font(.subheadline.monospacedDigit())
-                                    .frame(minWidth: 48)
+                            Text("\(layerCubes[index].count) 个")
+                                .font(.subheadline.monospacedDigit())
+                            HStack(spacing: 8) {
+                                Button {
+                                    guard layerCubes[index].count > 1 else { return }
+                                    layerCubes[index].removeLast()
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .disabled(layerCubes[index].count <= 1)
+                                Button {
+                                    addCube(toLayer: index)
+                                } label: {
+                                    Image(systemName: "plus.circle")
+                                }
+                                .disabled(layerCubes[index].count >= 64)
                             }
-                            .fixedSize()
                         }
                         .padding(10)
                         .background(Color(uiColor: .secondarySystemBackground))
@@ -1849,7 +1972,7 @@ private struct ObjectObserverView: View {
                     }
                 }
             }
-            Text("每层数量可独立调整（1–8 个），最多 8 层。")
+            Text("每层自动按方形网格排列（最多 64 个）。单击删除立方体，双击增加立方体。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -1923,14 +2046,14 @@ private struct ObjectObserverView: View {
         case .layeredCubes:
             let half = 0.46
             let spacing = 0.96
-            let layerCount = layerCubeCounts.count
-            for (layer, count) in layerCubeCounts.enumerated() {
+            let layerCount = layerCubes.count
+            for (layer, cubes) in layerCubes.enumerated() {
+                let side = gridSide(for: cubes)
                 let centeredLayer = Double(layer) - Double(layerCount - 1) / 2
                 let centerY = centeredLayer * spacing
-                // Slightly offset each layer in depth so the top view also reveals a pattern.
-                let centerZ = centeredLayer * spacing * 0.6
-                for cube in 0..<count {
-                    let centerX = (Double(cube) - Double(count - 1) / 2) * spacing
+                for cube in cubes {
+                    let centerX = (Double(cube.column) - Double(side - 1) / 2) * spacing
+                    let centerZ = (Double(cube.row) - Double(side - 1) / 2) * spacing
                     addCube(center: SIMD3<Double>(centerX, centerY, centerZ), half: half)
                 }
             }
