@@ -1648,6 +1648,7 @@ private struct ObserverTriangle {
     let a: SIMD3<Double>
     let b: SIMD3<Double>
     let c: SIMD3<Double>
+    let color: Color?
 }
 
 private struct ProjectedTriangle {
@@ -1711,8 +1712,12 @@ private struct ObjectObserverView: View {
                             path.addLine(to: triangle.points[2])
                             path.closeSubpath()
                             let shade = 0.34 + min(max((triangle.depth + 1.5) / 3.0, 0), 1) * 0.42
-                            context.fill(path, with: .color(.blue.opacity(shade)))
-                            context.stroke(path, with: .color(.primary.opacity(0.45)), lineWidth: 0.7)
+                            context.fill(path, with: .color(triangle.color ?? Color.blue.opacity(shade)))
+                            context.stroke(
+                                path,
+                                with: .color(triangle.color == nil ? Color.primary.opacity(0.45) : Color.black.opacity(0.88)),
+                                lineWidth: triangle.color == nil ? 0.7 : 1.15
+                            )
                         }
                     }
                     .padding(8)
@@ -1759,7 +1764,7 @@ private struct ObjectObserverView: View {
             .padding(.horizontal)
 
             Text(shape == .layeredCubes
-                 ? "拖动模型可从不同角度观察各层正方体形成的平面轮廓；可调整层数及每层数量。"
+                 ? "魔方配色：每个小正方体使用红、橙、黄、绿、蓝、白六色面，黑色缝隙清晰分隔小块。拖动可观察不同角度的组合轮廓。"
                  : "在模型区域拖动即可自由旋转；选择不同物体可切换几何模型。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -1851,8 +1856,8 @@ private struct ObjectObserverView: View {
 
     private func makeTriangles(for shape: ObserverShape) -> [ObserverTriangle] {
         var result: [ObserverTriangle] = []
-        func add(_ a: SIMD3<Double>, _ b: SIMD3<Double>, _ c: SIMD3<Double>) {
-            result.append(ObserverTriangle(a: a, b: b, c: c))
+        func add(_ a: SIMD3<Double>, _ b: SIMD3<Double>, _ c: SIMD3<Double>, color: Color? = nil) {
+            result.append(ObserverTriangle(a: a, b: b, c: c, color: color))
         }
 
         func addCube(center: SIMD3<Double>, half: Double) {
@@ -1868,9 +1873,20 @@ private struct ObjectObserverView: View {
             ]
             let faces = [[0,1,2,3], [4,7,6,5], [0,4,5,1],
                          [3,2,6,7], [0,3,7,4], [1,5,6,2]]
-            for face in faces {
-                add(v[face[0]], v[face[1]], v[face[2]])
-                add(v[face[0]], v[face[2]], v[face[3]])
+            // Rubik's Cube palette: each face has its own vivid color and dark seams.
+            // Face order matches the six vertex-index groups above.
+            let faceColors: [Color] = [
+                Color(red: 0.08, green: 0.30, blue: 0.88), // blue
+                Color(red: 0.00, green: 0.62, blue: 0.28), // green
+                Color(red: 1.00, green: 0.82, blue: 0.02), // yellow
+                Color(red: 0.96, green: 0.96, blue: 0.91), // white
+                Color(red: 1.00, green: 0.32, blue: 0.04), // orange
+                Color(red: 0.88, green: 0.02, blue: 0.06)  // red
+            ]
+            for (faceIndex, face) in faces.enumerated() {
+                let faceColor = faceColors[faceIndex]
+                add(v[face[0]], v[face[1]], v[face[2]], color: faceColor)
+                add(v[face[0]], v[face[2]], v[face[3]], color: faceColor)
             }
         }
 
