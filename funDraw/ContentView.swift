@@ -74,7 +74,7 @@ struct ContentView: View {
     @State private var isComparisonVisible = false
     @State private var isAdditionalExpressionVisible = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var selectedDestination: AppDestination = .functionDrawing
+    @State private var selectedDestination: AppDestination = .objectObserver
 
     private var parsedExpression: MathEngine? {
         MathEngine(expression: expression)
