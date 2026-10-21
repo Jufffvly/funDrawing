@@ -60,10 +60,24 @@ struct ContentView: View {
 
     @State private var isAnimating = true
     @State private var animationSpeed = 1.0
-    @State private var expression = "y = 2x + 1"
+    @State private var expression = "y = x^2 - 4"
+    @State private var comparisonExpression = "y = x"
 
     private var parsedExpression: MathEngine? {
         MathEngine(expression: expression)
+    }
+
+    private var parsedComparisonExpression: MathEngine? {
+        MathEngine(expression: comparisonExpression)
+    }
+
+    private var quadraticAnalysis: QuadraticAnalysis? {
+        parsedExpression?.quadraticAnalysis
+    }
+
+    private var detectedIntersections: [Double] {
+        guard let first = parsedExpression, let second = parsedComparisonExpression else { return [] }
+        return first.approximateIntersections(in: xRange, withFunction: { second.value($0) })
     }
 
     @State private var xRange: ClosedRange<Double> = -10.0...10.0
@@ -110,6 +124,25 @@ struct ContentView: View {
                     .background(Color(uiColor: .secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("交点比较函数")
+                            .font(.headline)
+                        TextField("例如：y = x", text: $comparisonExpression)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.system(.body, design: .monospaced))
+                        Label(
+                            parsedComparisonExpression == nil ? "比较表达式无效" : "绿色曲线用于计算两条函数的交点",
+                            systemImage: parsedComparisonExpression == nil ? "exclamationmark.triangle.fill" : "arrow.left.and.right"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(parsedComparisonExpression == nil ? .orange : .secondary)
+                    }
+                    .padding()
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
                     // Numerical key-point analysis for the entered expression
                     VStack(alignment: .leading, spacing: 6) {
                         Text("关键点分析")
@@ -136,7 +169,34 @@ struct ContentView: View {
                             Text("x = 0 不在函数定义域内")
                                 .font(.subheadline)
                         }
-                        Text("零点为数值近似；结果随当前 x 轴可视范围更新。")
+                        if let q = quadraticAnalysis {
+                            Text("二次函数顶点：((String(format: "%.4g", q.vertexX)), (String(format: "%.4g", q.vertexY)))")
+                                .font(.subheadline.monospaced())
+                                .textSelection(.enabled)
+                            Text("对称轴：x = (String(format: "%.4g", q.axisOfSymmetry))")
+                                .font(.subheadline.monospaced())
+                            Text("判别式：Δ = (String(format: "%.4g", q.discriminant))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text("与比较函数的交点（当前可视范围内）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if parsedComparisonExpression == nil {
+                            Text("请检查比较函数表达式")
+                                .font(.subheadline)
+                        } else if detectedIntersections.isEmpty {
+                            Text("当前范围内未检测到交点")
+                                .font(.subheadline)
+                        } else {
+                            Text(detectedIntersections.compactMap { x -> String? in
+                                guard let y = parsedExpression?.value(x) else { return nil }
+                                return "((String(format: "%.4g", x)), (String(format: "%.4g", y)))"
+                            }.joined(separator: "、"))
+                            .font(.subheadline.monospaced())
+                            .textSelection(.enabled)
+                        }
+                        Text("数值交点为近似值；仅分析当前 x 轴可视范围。")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -158,8 +218,11 @@ struct ContentView: View {
                                 .timeIntervalSinceReferenceDate,
                             animationSpeed: animationSpeed,
                             expression: parsedExpression,
+                            comparisonExpression: parsedComparisonExpression,
                             zeroes: detectedZeros,
                             yIntercept: yIntercept,
+                            quadraticAnalysis: quadraticAnalysis,
+                            intersections: detectedIntersections,
                             xRange: xRange,
                             yRange: yRange
                         )
@@ -478,8 +541,11 @@ struct FunctionCanvas: View {
     let time: Double
     let animationSpeed: Double
     let expression: MathEngine?
+    let comparisonExpression: MathEngine?
     let zeroes: [Double]
     let yIntercept: Double?
+    let quadraticAnalysis: QuadraticAnalysis?
+    let intersections: [Double]
     let xRange: ClosedRange<Double>
     let yRange: ClosedRange<Double>
 
@@ -755,17 +821,88 @@ struct FunctionCanvas: View {
                     style: StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round)
                 )
 
-                // Mark numerically detected x-axis zeros and the y-axis intercept.
+                // Draw the comparison function in green.
+            if let comparisonExpression {
+                var comparisonPath = Path()
+                var penDown = false
+                var previousY: Double?
+                for i in 0...samples {
+                    let x = xRange.lowerBound + Double(i) / Double(samples) * (xRange.upperBound - xRange.lowerBound)
+                    guard let y = comparisonExpression.value(x),
+                          y >= yRange.lowerBound - 2, y <= yRange.upperBound + 2 else {
+                        penDown = false
+                        previousY = nil
+                        continue
+                    }
+                    let p = point(x, y)
+                    let jump = previousY.map { abs(y - $0) > jumpThreshold } ?? false
+                    if penDown && !jump { comparisonPath.addLine(to: p) } else { comparisonPath.move(to: p) }
+                    penDown = true
+                    previousY = y
+                }
+                context.stroke(comparisonPath, with: .color(.green),
+                               style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+            }
+
+            // Mark numerically detected x-axis zeros and the y-axis intercept.
                 for zero in zeroes where zero >= xRange.lowerBound && zero <= xRange.upperBound {
                     let p = point(zero, 0)
                     let dot = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
                     context.fill(Path(ellipseIn: dot), with: .color(.blue))
+                    context.draw(Text("((String(format: "%.3g", zero)), 0)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.blue),
+                        at: CGPoint(x: min(max(p.x + 28, 28), size.width - 28),
+                                    y: min(max(p.y - 12, 10), size.height - 10)))
                 }
                 if let intercept = yIntercept,
                    intercept >= yRange.lowerBound, intercept <= yRange.upperBound {
                     let p = point(0, intercept)
                     let dot = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
                     context.fill(Path(ellipseIn: dot), with: .color(.orange))
+                    context.draw(Text("(0, (String(format: "%.3g", intercept)))")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.orange),
+                        at: CGPoint(x: min(max(p.x + 32, 32), size.width - 32),
+                                    y: min(max(p.y - 12, 10), size.height - 10)))
+                }
+                if let q = quadraticAnalysis {
+                    let vertex = point(q.vertexX, q.vertexY)
+                    if q.vertexX >= xRange.lowerBound, q.vertexX <= xRange.upperBound,
+                       q.vertexY >= yRange.lowerBound, q.vertexY <= yRange.upperBound {
+                        let rect = CGRect(x: vertex.x - 4, y: vertex.y - 4, width: 8, height: 8)
+                        context.fill(Path(ellipseIn: rect), with: .color(.red))
+                        context.draw(Text("顶点 ((String(format: "%.3g", q.vertexX)), (String(format: "%.3g", q.vertexY)))")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.red),
+                            at: CGPoint(x: min(max(vertex.x + 55, 55), size.width - 55),
+                                        y: min(max(vertex.y - 14, 10), size.height - 10)))
+                    }
+                    if q.axisOfSymmetry >= xRange.lowerBound, q.axisOfSymmetry <= xRange.upperBound {
+                        let axisX = point(q.axisOfSymmetry, 0).x
+                        var axis = Path()
+                        axis.move(to: CGPoint(x: axisX, y: 0))
+                        axis.addLine(to: CGPoint(x: axisX, y: size.height))
+                        context.stroke(axis, with: .color(.red.opacity(0.6)),
+                                       style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                        context.draw(Text("x = (String(format: "%.3g", q.axisOfSymmetry))")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.red),
+                            at: CGPoint(x: min(max(axisX + 34, 34), size.width - 34), y: 12))
+                    }
+                }
+                for x in intersections {
+                    guard let y = expression.value(x),
+                          x >= xRange.lowerBound, x <= xRange.upperBound,
+                          y >= yRange.lowerBound, y <= yRange.upperBound else { continue }
+                    let p = point(x, y)
+                    let rect = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
+                    context.fill(Path(ellipseIn: rect), with: .color(.green))
+                    context.draw(Text("((String(format: "%.3g", x)), (String(format: "%.3g", y)))")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.green),
+                        at: CGPoint(x: min(max(p.x + 38, 38), size.width - 38),
+                                    y: min(max(p.y + 13, 10), size.height - 10)))
                 }
             }
         }
