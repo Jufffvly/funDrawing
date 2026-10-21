@@ -111,6 +111,7 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showingControls = false
     @State private var showingExpressionEditor = false
+    @State private var showingObjectObserver = false
     @State private var selectedFunctionIndex = 2
     @FocusState private var focusedExpressionField: ExpressionField?
 
@@ -466,6 +467,14 @@ struct ContentView: View {
             .frame(maxHeight: .infinity)
         }
         .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingObjectObserver = true
+                } label: {
+                    Label("物体观察", systemImage: "cube.transparent")
+                }
+                .accessibilityLabel("打开三维物体观察")
+            }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("收起键盘") {
@@ -475,6 +484,16 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingExpressionEditor) {
             expressionEditorSheet
+        }
+        .sheet(isPresented: $showingObjectObserver) {
+            NavigationStack {
+                ObjectObserverView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("完成") { showingObjectObserver = false }
+                        }
+                    }
+            }
         }
         .navigationTitle("函数坐标系")
         .navigationBarTitleDisplayMode(.inline)
@@ -1525,6 +1544,223 @@ struct FunctionCanvas: View {
                 }
             }
         }
+    }
+}
+
+
+// MARK: - 3D Object Observer
+
+private enum ObserverShape: String, CaseIterable, Identifiable, Equatable {
+    case cube = "立方体"
+    case cylinder = "圆柱体"
+    case cone = "圆锥体"
+    case sphere = "球体"
+
+    var id: Self { self }
+}
+
+private struct ObserverTriangle {
+    let a: SIMD3<Double>
+    let b: SIMD3<Double>
+    let c: SIMD3<Double>
+}
+
+private struct ProjectedTriangle {
+    let points: [CGPoint]
+    let depth: Double
+}
+
+private struct ObjectObserverView: View {
+    @State private var shape: ObserverShape = .cube
+    @State private var yaw: Double = 0
+    @State private var pitch: Double = 0.22
+    @State private var dragStartYaw: Double = 0
+    @State private var dragStartPitch: Double = 0
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Picker("物体类型", selection: $shape) {
+                ForEach(ObserverShape.allCases) { item in
+                    Text(item.rawValue).tag(item)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+
+            GeometryReader { geometry in
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(Color(uiColor: .secondarySystemBackground))
+                    Canvas { context, size in
+                        let triangles = makeTriangles(for: shape)
+                        let projected = triangles.map { triangle -> ProjectedTriangle in
+                            let points3D = [triangle.a, triangle.b, triangle.c].map(rotate)
+                            let scale = min(size.width, size.height) * 0.31
+                            let points2D = points3D.map { p in
+                                CGPoint(x: size.width / 2 + p.x * scale,
+                                        y: size.height / 2 - p.y * scale)
+                            }
+                            return ProjectedTriangle(points: points2D,
+                                                     depth: points3D.map(\.z).reduce(0, +) / 3)
+                        }.sorted { $0.depth < $1.depth }
+
+                        for triangle in projected {
+                            guard triangle.points.count == 3 else { continue }
+                            var path = Path()
+                            path.move(to: triangle.points[0])
+                            path.addLine(to: triangle.points[1])
+                            path.addLine(to: triangle.points[2])
+                            path.closeSubpath()
+                            let shade = 0.34 + min(max((triangle.depth + 1.5) / 3.0, 0), 1) * 0.42
+                            context.fill(path, with: .color(.blue.opacity(shade)))
+                            context.stroke(path, with: .color(.primary.opacity(0.45)), lineWidth: 0.7)
+                        }
+                    }
+                    .padding(8)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onChanged { value in
+                                yaw = dragStartYaw + Double(value.translation.width) * 0.012
+                                pitch = min(max(dragStartPitch - Double(value.translation.height) * 0.012,
+                                                -Double.pi / 2), Double.pi / 2)
+                            }
+                            .onEnded { _ in
+                                dragStartYaw = yaw
+                                dragStartPitch = pitch
+                            }
+                    )
+                }
+            }
+            .frame(minHeight: 280)
+            .padding(.horizontal)
+
+            VStack(spacing: 10) {
+                Text("标准视角")
+                    .font(.headline)
+                HStack(spacing: 10) {
+                    viewButton("上面", icon: "arrow.up.to.line") {
+                        setView(yaw: 0, pitch: Double.pi / 2)
+                    }
+                    viewButton("正面", icon: "rectangle") {
+                        setView(yaw: 0, pitch: 0)
+                    }
+                    viewButton("左面", icon: "arrow.left.to.line") {
+                        setView(yaw: Double.pi / 2, pitch: 0)
+                    }
+                }
+                Button {
+                    setView(yaw: 0, pitch: 0.22)
+                } label: {
+                    Label("恢复默认角度", systemImage: "arrow.counterclockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal)
+
+            Text("在模型区域拖动即可自由旋转；选择不同物体可切换几何模型。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Spacer(minLength: 8)
+        }
+        .padding(.top, 12)
+        .navigationTitle("三维物体观察")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: shape) { _ in
+            setView(yaw: 0, pitch: 0.22)
+        }
+    }
+
+    private func viewButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .frame(maxWidth: .infinity, minHeight: 42)
+        }
+        .buttonStyle(.borderedProminent)
+    }
+
+    private func setView(yaw newYaw: Double, pitch newPitch: Double) {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            yaw = newYaw
+            pitch = newPitch
+            dragStartYaw = newYaw
+            dragStartPitch = newPitch
+        }
+    }
+
+    private func rotate(_ point: SIMD3<Double>) -> SIMD3<Double> {
+        let x = point.x * cos(yaw) + point.z * sin(yaw)
+        let z = -point.x * sin(yaw) + point.z * cos(yaw)
+        let y = point.y * cos(pitch) - z * sin(pitch)
+        let depth = point.y * sin(pitch) + z * cos(pitch)
+        return SIMD3<Double>(x, y, depth)
+    }
+
+    private func makeTriangles(for shape: ObserverShape) -> [ObserverTriangle] {
+        var result: [ObserverTriangle] = []
+        func add(_ a: SIMD3<Double>, _ b: SIMD3<Double>, _ c: SIMD3<Double>) {
+            result.append(ObserverTriangle(a: a, b: b, c: c))
+        }
+
+        switch shape {
+        case .cube:
+            let v: [SIMD3<Double>] = [
+                SIMD3(-1,-1,-1), SIMD3(1,-1,-1), SIMD3(1,1,-1), SIMD3(-1,1,-1),
+                SIMD3(-1,-1,1), SIMD3(1,-1,1), SIMD3(1,1,1), SIMD3(-1,1,1)
+            ]
+            let faces = [[0,1,2,3], [4,7,6,5], [0,4,5,1],
+                         [3,2,6,7], [0,3,7,4], [1,5,6,2]]
+            for f in faces {
+                add(v[f[0]], v[f[1]], v[f[2]])
+                add(v[f[0]], v[f[2]], v[f[3]])
+            }
+        case .cylinder, .cone:
+            let segments = 36
+            for i in 0..<segments {
+                let t0 = Double(i) * 2 * Double.pi / Double(segments)
+                let t1 = Double(i + 1) * 2 * Double.pi / Double(segments)
+                let p0 = SIMD3<Double>(cos(t0), -1, sin(t0))
+                let p1 = SIMD3<Double>(cos(t1), -1, sin(t1))
+                let top0: SIMD3<Double>
+                let top1: SIMD3<Double>
+                if shape == .cylinder {
+                    top0 = SIMD3<Double>(cos(t0), 1, sin(t0))
+                    top1 = SIMD3<Double>(cos(t1), 1, sin(t1))
+                    add(p0, p1, top1)
+                    add(p0, top1, top0)
+                } else {
+                    top0 = SIMD3<Double>(0, 1, 0)
+                    top1 = top0
+                    add(p0, p1, top0)
+                }
+                add(SIMD3<Double>(0, -1, 0), p1, p0)
+                if shape == .cylinder {
+                    add(SIMD3<Double>(0, 1, 0), top0, top1)
+                }
+            }
+        case .sphere:
+            let rings = 16
+            let segments = 32
+            for ring in 0..<rings {
+                let lat0 = -Double.pi / 2 + Double(ring) * Double.pi / Double(rings)
+                let lat1 = -Double.pi / 2 + Double(ring + 1) * Double.pi / Double(rings)
+                for segment in 0..<segments {
+                    let lon0 = Double(segment) * 2 * Double.pi / Double(segments)
+                    let lon1 = Double(segment + 1) * 2 * Double.pi / Double(segments)
+                    func point(_ lat: Double, _ lon: Double) -> SIMD3<Double> {
+                        SIMD3<Double>(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon))
+                    }
+                    let a = point(lat0, lon0), b = point(lat0, lon1)
+                    let c = point(lat1, lon1), d = point(lat1, lon0)
+                    add(a, b, c)
+                    add(a, c, d)
+                }
+            }
+        }
+        return result
     }
 }
 
