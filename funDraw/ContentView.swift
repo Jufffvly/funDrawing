@@ -98,269 +98,312 @@ struct ContentView: View {
 
     private let initialRange = -10.0...10.0
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var showingControls = false
+
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Arbitrary function expression input
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("任意函数输入")
-                            .font(.headline)
-                        TextField("例如：y = x^2 - 4", text: $expression)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
-                        if parsedExpression != nil {
-                            Label("表达式有效，蓝色曲线实时更新", systemImage: "checkmark.circle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.green)
-                        } else {
-                            Label("表达式无效或不完整，请检查运算符、括号和函数名", systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
+        Group {
+            if horizontalSizeClass == .compact {
+                // iPhone：绘图区始终作为首屏，操作集中到可见的工具按钮中。
+                NavigationStack {
+                    graphPanel
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button {
+                                    showingControls = true
+                                } label: {
+                                    Label("操作", systemImage: "slider.horizontal.3")
+                                }
+                                .accessibilityLabel("打开绘图操作")
+                            }
                         }
-                        Text("支持 x、数字、括号、+ − × ÷、幂运算、隐式乘法（2x、2(x+1)）及 sin、cos、tan、abs、sqrt、exp、ln、log、pi、e。")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("交点比较函数")
-                            .font(.headline)
-                        TextField("例如：y = x", text: $comparisonExpression)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
-                        Label(
-                            parsedComparisonExpression == nil ? "比较表达式无效" : "绿色曲线用于计算两条函数的交点",
-                            systemImage: parsedComparisonExpression == nil ? "exclamationmark.triangle.fill" : "arrow.left.and.right"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(parsedComparisonExpression == nil ? .orange : .secondary)
-                    }
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    // Numerical key-point analysis for the entered expression
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("关键点分析")
-                            .font(.headline)
-                        Text("x 轴交点（零点，当前可视范围内）")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if detectedZeros.isEmpty {
-                            Text("当前范围内未检测到零点")
-                                .font(.subheadline)
-                        } else {
-                            Text(detectedZeros.map { "(\(String(format: "%.4g", $0)), 0)" }.joined(separator: "、"))
-                                .font(.subheadline.monospaced())
-                                .textSelection(.enabled)
-                        }
-                        Text("y 轴交点")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if let intercept = yIntercept {
-                            Text("(0, \(String(format: "%.4g", intercept)))")
-                                .font(.subheadline.monospaced())
-                                .textSelection(.enabled)
-                        } else {
-                            Text("x = 0 不在函数定义域内")
-                                .font(.subheadline)
-                        }
-                        if let q = quadraticAnalysis {
-                            Text("二次函数顶点：(\(String(format: "%.4g", q.vertexX)), \(String(format: "%.4g", q.vertexY)))")
-                                .font(.subheadline.monospaced())
-                                .textSelection(.enabled)
-                            Text("对称轴：x = \(String(format: "%.4g", q.axisOfSymmetry))")
-                                .font(.subheadline.monospaced())
-                            Text("判别式：Δ = \(String(format: "%.4g", q.discriminant))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("与比较函数的交点（当前可视范围内）")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if parsedComparisonExpression == nil {
-                            Text("请检查比较函数表达式")
-                                .font(.subheadline)
-                        } else if detectedIntersections.isEmpty {
-                            Text("当前范围内未检测到交点")
-                                .font(.subheadline)
-                        } else {
-                            Text(detectedIntersections.compactMap { x -> String? in
-                                guard let y = parsedExpression?.value(x) else { return nil }
-                                return "(\(String(format: "%.4g", x)), \(String(format: "%.4g", y)))"
-                            }.joined(separator: "、"))
-                            .font(.subheadline.monospaced())
-                            .textSelection(.enabled)
-                        }
-                        Text("数值交点为近似值；仅分析当前 x 轴可视范围。")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    // Main buttons
-                    HStack(spacing: 8) {
-                        Button {
-                            isAnimating.toggle()
-                        } label: {
-                            Label(
-                                isAnimating ? "暂停动画" : "继续动画",
-                                systemImage: isAnimating
-                                    ? "pause.fill" : "play.fill"
-                            )
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        Button("全部显示") {
-                            for kind in FunctionKind.allCases {
-                                updateSetting(kind) {
-                                    $0.isVisible = true
+                }
+                .sheet(isPresented: $showingControls) {
+                    NavigationStack {
+                        controlsPanel
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button("完成") {
+                                        showingControls = false
+                                    }
                                 }
                             }
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button("重置") {
-                            resetSettings()
-                        }
-                        .buttonStyle(.bordered)
                     }
-
-                    // Animation speed
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("动画速度")
-                            Spacer()
-                            Text(animationSpeed, format: .number.precision(.fractionLength(2)))
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Slider(value: $animationSpeed, in: 0...3)
-                    }
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    // Function settings
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("函数列表")
-                            .font(.headline)
-
-                        ForEach(FunctionKind.allCases) { kind in
-                            functionRow(kind)
-
-                            if kind != FunctionKind.allCases.last {
-                                Divider()
+                }
+            } else {
+                // iPad / regular width：保留分栏布局，绘图区默认优先显示。
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    controlsPanel
+                } detail: {
+                    graphPanel
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button {
+                                    columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                                } label: {
+                                    Image(systemName: "sidebar.left")
+                                }
+                                .accessibilityLabel("显示或隐藏操作侧栏")
                             }
                         }
-                    }
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
                 }
-                .padding()
-            }
-            .navigationTitle("绘图操作")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationSplitViewColumnWidth(min: 300, ideal: 340)
-        } detail: {
-            VStack(spacing: 10) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("函数绘图")
-                            .font(.title2.bold())
-                        Text(expression)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    Spacer(minLength: 8)
-                }
-                .padding(.horizontal, 4)
-
-                    // Graph
-                    TimelineView(
-                        .animation(
-                            minimumInterval: 1.0 / 30.0,
-                            paused: !isAnimating
-                        )
-                    ) { timeline in
-                        FunctionCanvas(
-                            settings: settings,
-                            time: timeline.date
-                                .timeIntervalSinceReferenceDate,
-                            animationSpeed: animationSpeed,
-                            expression: parsedExpression,
-                            comparisonExpression: parsedComparisonExpression,
-                            zeroes: detectedZeros,
-                            yIntercept: yIntercept,
-                            quadraticAnalysis: quadraticAnalysis,
-                            intersections: detectedIntersections,
-                            xRange: xRange,
-                            yRange: yRange
-                        )
-                    }
-                    .frame(height: 500)
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    // 在图表上双指捏合，即可同时缩放坐标轴和所有函数曲线
-                    .gesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                let scale = Double(value)
-                                guard scale > 0 else { return }
-
-                                let centerX = (baseXRange.lowerBound + baseXRange.upperBound) / 2
-                                let centerY = (baseYRange.lowerBound + baseYRange.upperBound) / 2
-                                let halfX = (baseXRange.upperBound - baseXRange.lowerBound) / 2 / scale
-                                let halfY = (baseYRange.upperBound - baseYRange.lowerBound) / 2 / scale
-
-                                // 限制最小/最大可视范围，防止缩放过度
-                                let clampedHalfX = min(max(halfX, 0.05), 500.0)
-                                let clampedHalfY = min(max(halfY, 0.05), 500.0)
-
-                                xRange = (centerX - clampedHalfX)...(centerX + clampedHalfX)
-                                yRange = (centerY - clampedHalfY)...(centerY + clampedHalfY)
-                            }
-                            .onEnded { _ in
-                                baseXRange = xRange
-                                baseYRange = yRange
-                            }
-                    )
-
-
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .navigationTitle("函数坐标系")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
-                    } label: {
-                        Image(systemName: "sidebar.left")
-                    }
-                    .accessibilityLabel("显示或隐藏操作侧栏")
-                }
+                .navigationSplitViewStyle(.balanced)
             }
         }
-        .navigationSplitViewStyle(.balanced)
+    }
+
+    private var controlsPanel: some View {
+        ScrollView {
+                        VStack(spacing: 16) {
+                            // Arbitrary function expression input
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("任意函数输入")
+                                    .font(.headline)
+                                TextField("例如：y = x^2 - 4", text: $expression)
+                                    .textFieldStyle(.roundedBorder)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .font(.system(.body, design: .monospaced))
+                                if parsedExpression != nil {
+                                    Label("表达式有效，蓝色曲线实时更新", systemImage: "checkmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                } else {
+                                    Label("表达式无效或不完整，请检查运算符、括号和函数名", systemImage: "exclamationmark.triangle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
+                                }
+                                Text("支持 x、数字、括号、+ − × ÷、幂运算、隐式乘法（2x、2(x+1)）及 sin、cos、tan、abs、sqrt、exp、ln、log、pi、e。")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding()
+                            .background(Color(uiColor: .secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+        
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("交点比较函数")
+                                    .font(.headline)
+                                TextField("例如：y = x", text: $comparisonExpression)
+                                    .textFieldStyle(.roundedBorder)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .font(.system(.body, design: .monospaced))
+                                Label(
+                                    parsedComparisonExpression == nil ? "比较表达式无效" : "绿色曲线用于计算两条函数的交点",
+                                    systemImage: parsedComparisonExpression == nil ? "exclamationmark.triangle.fill" : "arrow.left.and.right"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(parsedComparisonExpression == nil ? .orange : .secondary)
+                            }
+                            .padding()
+                            .background(Color(uiColor: .secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+        
+                            // Numerical key-point analysis for the entered expression
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("关键点分析")
+                                    .font(.headline)
+                                Text("x 轴交点（零点，当前可视范围内）")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if detectedZeros.isEmpty {
+                                    Text("当前范围内未检测到零点")
+                                        .font(.subheadline)
+                                } else {
+                                    Text(detectedZeros.map { "(\(String(format: "%.4g", $0)), 0)" }.joined(separator: "、"))
+                                        .font(.subheadline.monospaced())
+                                        .textSelection(.enabled)
+                                }
+                                Text("y 轴交点")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if let intercept = yIntercept {
+                                    Text("(0, \(String(format: "%.4g", intercept)))")
+                                        .font(.subheadline.monospaced())
+                                        .textSelection(.enabled)
+                                } else {
+                                    Text("x = 0 不在函数定义域内")
+                                        .font(.subheadline)
+                                }
+                                if let q = quadraticAnalysis {
+                                    Text("二次函数顶点：(\(String(format: "%.4g", q.vertexX)), \(String(format: "%.4g", q.vertexY)))")
+                                        .font(.subheadline.monospaced())
+                                        .textSelection(.enabled)
+                                    Text("对称轴：x = \(String(format: "%.4g", q.axisOfSymmetry))")
+                                        .font(.subheadline.monospaced())
+                                    Text("判别式：Δ = \(String(format: "%.4g", q.discriminant))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text("与比较函数的交点（当前可视范围内）")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if parsedComparisonExpression == nil {
+                                    Text("请检查比较函数表达式")
+                                        .font(.subheadline)
+                                } else if detectedIntersections.isEmpty {
+                                    Text("当前范围内未检测到交点")
+                                        .font(.subheadline)
+                                } else {
+                                    Text(detectedIntersections.compactMap { x -> String? in
+                                        guard let y = parsedExpression?.value(x) else { return nil }
+                                        return "(\(String(format: "%.4g", x)), \(String(format: "%.4g", y)))"
+                                    }.joined(separator: "、"))
+                                    .font(.subheadline.monospaced())
+                                    .textSelection(.enabled)
+                                }
+                                Text("数值交点为近似值；仅分析当前 x 轴可视范围。")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(Color(uiColor: .secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+        
+                            // Main buttons
+                            HStack(spacing: 8) {
+                                Button {
+                                    isAnimating.toggle()
+                                } label: {
+                                    Label(
+                                        isAnimating ? "暂停动画" : "继续动画",
+                                        systemImage: isAnimating
+                                            ? "pause.fill" : "play.fill"
+                                    )
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+        
+                                Button("全部显示") {
+                                    for kind in FunctionKind.allCases {
+                                        updateSetting(kind) {
+                                            $0.isVisible = true
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+        
+                                Button("重置") {
+                                    resetSettings()
+                                }
+                                .buttonStyle(.bordered)
+                            }
+        
+                            // Animation speed
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("动画速度")
+                                    Spacer()
+                                    Text(animationSpeed, format: .number.precision(.fractionLength(2)))
+                                        .monospacedDigit()
+                                        .foregroundStyle(.secondary)
+                                }
+        
+                                Slider(value: $animationSpeed, in: 0...3)
+                            }
+                            .padding()
+                            .background(Color(uiColor: .secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+        
+                            // Function settings
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("函数列表")
+                                    .font(.headline)
+        
+                                ForEach(FunctionKind.allCases) { kind in
+                                    functionRow(kind)
+        
+                                    if kind != FunctionKind.allCases.last {
+                                        Divider()
+                                    }
+                                }
+                            }
+                            .padding()
+                            .background(Color(uiColor: .secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+        
+                        }
+                        .padding()
+                    }
+                    .navigationTitle("绘图操作")
+                    .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var graphPanel: some View {
+        VStack(spacing: 10) {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("函数绘图")
+                                    .font(.title2.bold())
+                                Text(expression)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            Spacer(minLength: 8)
+                        }
+                        .padding(.horizontal, 4)
+        
+                            // Graph
+                            TimelineView(
+                                .animation(
+                                    minimumInterval: 1.0 / 30.0,
+                                    paused: !isAnimating
+                                )
+                            ) { timeline in
+                                FunctionCanvas(
+                                    settings: settings,
+                                    time: timeline.date
+                                        .timeIntervalSinceReferenceDate,
+                                    animationSpeed: animationSpeed,
+                                    expression: parsedExpression,
+                                    comparisonExpression: parsedComparisonExpression,
+                                    zeroes: detectedZeros,
+                                    yIntercept: yIntercept,
+                                    quadraticAnalysis: quadraticAnalysis,
+                                    intersections: detectedIntersections,
+                                    xRange: xRange,
+                                    yRange: yRange
+                                )
+                            }
+                            .frame(height: 500)
+                            .background(Color(uiColor: .secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            // 在图表上双指捏合，即可同时缩放坐标轴和所有函数曲线
+                            .gesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        let scale = Double(value)
+                                        guard scale > 0 else { return }
+        
+                                        let centerX = (baseXRange.lowerBound + baseXRange.upperBound) / 2
+                                        let centerY = (baseYRange.lowerBound + baseYRange.upperBound) / 2
+                                        let halfX = (baseXRange.upperBound - baseXRange.lowerBound) / 2 / scale
+                                        let halfY = (baseYRange.upperBound - baseYRange.lowerBound) / 2 / scale
+        
+                                        // 限制最小/最大可视范围，防止缩放过度
+                                        let clampedHalfX = min(max(halfX, 0.05), 500.0)
+                                        let clampedHalfY = min(max(halfY, 0.05), 500.0)
+        
+                                        xRange = (centerX - clampedHalfX)...(centerX + clampedHalfX)
+                                        yRange = (centerY - clampedHalfY)...(centerY + clampedHalfY)
+                                    }
+                                    .onEnded { _ in
+                                        baseXRange = xRange
+                                        baseYRange = yRange
+                                    }
+                            )
+        
+        
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .navigationTitle("函数坐标系")
+                    .navigationBarTitleDisplayMode(.inline)
+        
     }
 
     // MARK: - Safe Settings Update
