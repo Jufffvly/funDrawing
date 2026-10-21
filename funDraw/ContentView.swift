@@ -722,7 +722,7 @@ struct FunctionCanvas: View {
 
 // MARK: - Safe Math Expression Parser
 
-private struct MathExpression {
+struct MathExpression {
     private let root: Node
 
     init?(expression: String) {
