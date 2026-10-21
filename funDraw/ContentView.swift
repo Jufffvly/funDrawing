@@ -104,6 +104,7 @@ struct ContentView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showingControls = false
+    @State private var showingExpressionEditor = false
     @State private var selectedFunctionIndex = 2
     @FocusState private var focusedExpressionField: ExpressionField?
 
@@ -455,6 +456,9 @@ struct ContentView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingExpressionEditor) {
+            expressionEditorSheet
+        }
         .navigationTitle("函数坐标系")
         .navigationBarTitleDisplayMode(.inline)
         
@@ -463,8 +467,7 @@ struct ContentView: View {
     // MARK: - Custom Function Controls
 
     private var customExpressionControlsPanel: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("自定义函数", systemImage: "function")
                     .font(.headline)
@@ -482,14 +485,31 @@ struct ContentView: View {
                 .accessibilityLabel("显示自定义函数")
             }
 
-            TextField("输入函数，例如：y = x^2 - 4", text: $expression)
-                .textFieldStyle(.roundedBorder)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .font(.system(.body, design: .monospaced))
-                .focused($focusedExpressionField, equals: .custom)
-                .submitLabel(.done)
-                .onSubmit { focusedExpressionField = nil }
+            Button {
+                showingExpressionEditor = true
+            } label: {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("编辑函数表达式")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Text(expression)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "square.and.pencil")
+                        .foregroundStyle(.tint)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(uiColor: .tertiarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             Label(
                 parsedExpression == nil ? "表达式无效，请检查输入" : "表达式有效，曲线会实时更新",
@@ -502,14 +522,32 @@ struct ContentView: View {
                 .disabled(!isCustomExpressionVisible)
 
             if isComparisonVisible {
-                TextField("比较函数，例如：y = x", text: $comparisonExpression)
-                    .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .font(.system(.body, design: .monospaced))
-                    .focused($focusedExpressionField, equals: .comparison)
-                    .submitLabel(.done)
-                    .onSubmit { focusedExpressionField = nil }
+                Button {
+                    showingExpressionEditor = true
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("编辑比较函数")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.primary)
+                            Text(comparisonExpression)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer()
+                        Image(systemName: "square.and.pencil")
+                            .foregroundStyle(.tint)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(uiColor: .tertiarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
                 Text(parsedComparisonExpression == nil ? "比较函数表达式无效" : "比较曲线以绿色显示")
                     .font(.caption2)
                     .foregroundStyle(parsedComparisonExpression == nil ? .orange : .secondary)
@@ -518,13 +556,84 @@ struct ContentView: View {
             Text("支持幂运算、括号、隐式乘法及 sin、cos、tan、abs、sqrt、exp、ln、log 等函数。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .scrollDismissesKeyboard(.interactively)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var expressionEditorSheet: some View {
+        NavigationStack {
+            Form {
+                Section("自定义函数") {
+                    TextField("例如：y = x^2 - 4", text: $expression)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.system(.body, design: .monospaced))
+                        .focused($focusedExpressionField, equals: .custom)
+                        .submitLabel(.done)
+                        .onSubmit { focusedExpressionField = nil }
+
+                    Label(
+                        parsedExpression == nil ? "表达式无效或不完整" : "表达式有效，蓝色曲线实时更新",
+                        systemImage: parsedExpression == nil ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(parsedExpression == nil ? .orange : .green)
+                }
+
+                Section("比较函数") {
+                    Toggle("显示比较函数", isOn: $isComparisonVisible)
+                        .disabled(!isCustomExpressionVisible)
+
+                    if isComparisonVisible {
+                        TextField("例如：y = x", text: $comparisonExpression)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.system(.body, design: .monospaced))
+                            .focused($focusedExpressionField, equals: .comparison)
+                            .submitLabel(.done)
+                            .onSubmit { focusedExpressionField = nil }
+
+                        Label(
+                            parsedComparisonExpression == nil ? "比较表达式无效" : "绿色曲线实时更新",
+                            systemImage: parsedComparisonExpression == nil ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(parsedComparisonExpression == nil ? .orange : .green)
+                    }
+                }
+
+                Section {
+                    Text("支持 x、数字、括号、+ − × ÷、幂运算、隐式乘法（2x、2(x+1)）及 sin、cos、tan、abs、sqrt、exp、ln、log、pi、e。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("编辑函数")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") {
+                        focusedExpressionField = nil
+                        showingExpressionEditor = false
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("收起键盘") {
+                        focusedExpressionField = nil
+                    }
+                }
+            }
+            .onAppear {
+                focusedExpressionField = .custom
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Swipeable Function Parameter Controls
