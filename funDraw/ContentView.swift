@@ -1797,7 +1797,7 @@ private struct ObjectObserverView: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(layerCubeCounts.indices, id: \\.self) { index in
+                    ForEach(layerCubeCounts.indices, id: \.self) { index in
                         VStack(spacing: 5) {
                             Text("第\(index + 1)层")
                                 .font(.caption)
