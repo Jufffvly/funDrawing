@@ -170,12 +170,12 @@ struct ContentView: View {
                                 .font(.subheadline)
                         }
                         if let q = quadraticAnalysis {
-                            Text("二次函数顶点：((String(format: "%.4g", q.vertexX)), (String(format: "%.4g", q.vertexY)))")
+                            Text("二次函数顶点：(\(String(format: "%.4g", q.vertexX)), \(String(format: "%.4g", q.vertexY)))")
                                 .font(.subheadline.monospaced())
                                 .textSelection(.enabled)
-                            Text("对称轴：x = (String(format: "%.4g", q.axisOfSymmetry))")
+                            Text("对称轴：x = \(String(format: "%.4g", q.axisOfSymmetry))")
                                 .font(.subheadline.monospaced())
-                            Text("判别式：Δ = (String(format: "%.4g", q.discriminant))")
+                            Text("判别式：Δ = \(String(format: "%.4g", q.discriminant))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -191,7 +191,7 @@ struct ContentView: View {
                         } else {
                             Text(detectedIntersections.compactMap { x -> String? in
                                 guard let y = parsedExpression?.value(x) else { return nil }
-                                return "((String(format: "%.4g", x)), (String(format: "%.4g", y)))"
+                                return "(\(String(format: "%.4g", x)), \(String(format: "%.4g", y)))"
                             }.joined(separator: "、"))
                             .font(.subheadline.monospaced())
                             .textSelection(.enabled)
@@ -849,7 +849,7 @@ struct FunctionCanvas: View {
                     let p = point(zero, 0)
                     let dot = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
                     context.fill(Path(ellipseIn: dot), with: .color(.blue))
-                    context.draw(Text("((String(format: "%.3g", zero)), 0)")
+                    context.draw(Text("(\(String(format: "%.3g", zero)), 0)")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.blue),
                         at: CGPoint(x: min(max(p.x + 28, 28), size.width - 28),
@@ -860,7 +860,7 @@ struct FunctionCanvas: View {
                     let p = point(0, intercept)
                     let dot = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
                     context.fill(Path(ellipseIn: dot), with: .color(.orange))
-                    context.draw(Text("(0, (String(format: "%.3g", intercept)))")
+                    context.draw(Text("(0, \(String(format: "%.3g", intercept)))")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.orange),
                         at: CGPoint(x: min(max(p.x + 32, 32), size.width - 32),
@@ -872,7 +872,7 @@ struct FunctionCanvas: View {
                        q.vertexY >= yRange.lowerBound, q.vertexY <= yRange.upperBound {
                         let rect = CGRect(x: vertex.x - 4, y: vertex.y - 4, width: 8, height: 8)
                         context.fill(Path(ellipseIn: rect), with: .color(.red))
-                        context.draw(Text("顶点 ((String(format: "%.3g", q.vertexX)), (String(format: "%.3g", q.vertexY)))")
+                        context.draw(Text("顶点 (\(String(format: "%.3g", q.vertexX)), \(String(format: "%.3g", q.vertexY)))")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.red),
                             at: CGPoint(x: min(max(vertex.x + 55, 55), size.width - 55),
@@ -885,7 +885,7 @@ struct FunctionCanvas: View {
                         axis.addLine(to: CGPoint(x: axisX, y: size.height))
                         context.stroke(axis, with: .color(.red.opacity(0.6)),
                                        style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                        context.draw(Text("x = (String(format: "%.3g", q.axisOfSymmetry))")
+                        context.draw(Text("x = \(String(format: "%.3g", q.axisOfSymmetry))")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.red),
                             at: CGPoint(x: min(max(axisX + 34, 34), size.width - 34), y: 12))
@@ -898,7 +898,7 @@ struct FunctionCanvas: View {
                     let p = point(x, y)
                     let rect = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
                     context.fill(Path(ellipseIn: rect), with: .color(.green))
-                    context.draw(Text("((String(format: "%.3g", x)), (String(format: "%.3g", y)))")
+                    context.draw(Text("(\(String(format: "%.3g", x)), \(String(format: "%.3g", y)))")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.green),
                         at: CGPoint(x: min(max(p.x + 38, 38), size.width - 38),
