@@ -1691,7 +1691,9 @@ private struct ObjectObserverView: View {
                                 }
                                 let widestLayer = Double(max(layerCubeCounts.max() ?? 1, 1)) * 1.05
                                 let totalHeight = Double(max(layerCubeCounts.count, 1)) * 1.05
-                                return min(size.width / widestLayer, size.height / totalHeight) * 0.82
+                                let totalDepth = Double(max(layerCubeCounts.count, 1)) * 0.65
+                                return min(size.width / (widestLayer + totalDepth),
+                                           size.height / max(totalHeight, totalDepth)) * 0.82
                             }()
                             let points2D = points3D.map { p in
                                 CGPoint(x: size.width / 2 + p.x * scale,
@@ -1880,10 +1882,13 @@ private struct ObjectObserverView: View {
             let spacing = 0.96
             let layerCount = layerCubeCounts.count
             for (layer, count) in layerCubeCounts.enumerated() {
-                let centerY = (Double(layer) - Double(layerCount - 1) / 2) * spacing
+                let centeredLayer = Double(layer) - Double(layerCount - 1) / 2
+                let centerY = centeredLayer * spacing
+                // Slightly offset each layer in depth so the top view also reveals a pattern.
+                let centerZ = centeredLayer * spacing * 0.6
                 for cube in 0..<count {
                     let centerX = (Double(cube) - Double(count - 1) / 2) * spacing
-                    addCube(center: SIMD3<Double>(centerX, centerY, 0), half: half)
+                    addCube(center: SIMD3<Double>(centerX, centerY, centerZ), half: half)
                 }
             }
         case .cylinder, .cone:
