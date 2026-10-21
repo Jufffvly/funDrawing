@@ -347,14 +347,13 @@ struct ContentView: View {
     }
 
     private var graphPanel: some View {
-        let quadratic = settings[.quadratic] ?? FunctionSettings()
-
-        return VStack(spacing: 10) {
+        return ScrollView(.vertical) {
+            VStack(spacing: 10) {
                         HStack(alignment: .center, spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("函数绘图")
                                     .font(.title2.bold())
-                                Text("二次函数 y = ax² + bx + c")
+                                Text("六种函数 · 参数实时可调")
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -416,13 +415,99 @@ struct ContentView: View {
                                     }
                             )
 
-                        quadraticControlsPanel(quadratic)
+                        functionParameterControls
                     }
                     .padding(12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .navigationTitle("函数坐标系")
+                    .frame(maxWidth: .infinity, alignment: .top)
+        }
+        .navigationTitle("函数坐标系")
                     .navigationBarTitleDisplayMode(.inline)
         
+    }
+
+    // MARK: - First-screen Function Parameter Controls
+
+    private var functionParameterControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("函数参数控制")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("调整下方参数，曲线会在上方坐标系中实时变化。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(FunctionKind.allCases) { kind in
+                if kind == .quadratic {
+                    quadraticControlsPanel(settings[.quadratic] ?? FunctionSettings())
+                } else {
+                    functionParameterPanel(kind)
+                }
+            }
+        }
+    }
+
+    private func functionParameterPanel(_ kind: FunctionKind) -> some View {
+        let config = settings[kind] ?? FunctionSettings()
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(kind.color)
+                    .frame(width: 10, height: 10)
+                Text(kind.rawValue)
+                    .font(.subheadline.bold())
+                Spacer()
+                Toggle("显示", isOn: Binding(
+                    get: { settings[kind]?.isVisible ?? false },
+                    set: { value in
+                        updateSetting(kind) { $0.isVisible = value }
+                    }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("显示\(kind.rawValue)")
+            }
+
+            Text(kind.formula)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+
+            switch kind {
+            case .sine, .cosine:
+                settingSlider(kind, "振幅 A", value: config.a, range: 0.1...3.0, key: .a)
+                settingSlider(kind, "相位 φ", value: config.phase, range: 0...(2 * Double.pi), key: .phase)
+                Text(String(format: kind == .sine ? "当前：y = %.2f sin(x + %.2f)" : "当前：y = %.2f cos(x + %.2f)", config.a, config.phase))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(kind.color)
+
+            case .linear:
+                settingSlider(kind, "斜率 k", value: config.k, range: -3...3, key: .k)
+                settingSlider(kind, "截距 b", value: config.b, range: -5...5, key: .b)
+                Text(String(format: "当前：y = %.2fx %+.2f", config.k, config.b))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(kind.color)
+
+            case .exponential:
+                settingSlider(kind, "指数系数 k", value: config.k, range: -1...1, key: .k)
+                Text(String(format: "当前：y = e^(%.2fx) - 1", config.k))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(kind.color)
+
+            case .absolute:
+                settingSlider(kind, "系数 A", value: config.a, range: -3...3, key: .a)
+                settingSlider(kind, "常数项 c", value: config.c, range: -5...5, key: .c)
+                Text(String(format: "当前：y = %.2f|x| %+.2f", config.a, config.c))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(kind.color)
+
+            case .quadratic:
+                EmptyView()
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Quadratic Coefficient Controls
@@ -668,6 +753,7 @@ struct ContentView: View {
                     },
                     set: { newValue in
                         updateSetting(kind) { item in
+                            item.isVisible = true
                             switch key {
                             case .a: item.a = newValue
                             case .b: item.b = newValue
