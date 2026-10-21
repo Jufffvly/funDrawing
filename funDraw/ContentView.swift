@@ -62,7 +62,7 @@ struct ContentView: View {
     @State private var animationSpeed = 1.0
     @State private var expression = "y = x^2 - 4"
     @State private var comparisonExpression = "y = x"
-    @State private var showingControls = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .detailOnly
 
     private var parsedExpression: MathEngine? {
         MathEngine(expression: expression)
@@ -99,7 +99,79 @@ struct ContentView: View {
     private let initialRange = -10.0...10.0
 
     var body: some View {
-        NavigationStack {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Main buttons
+                    HStack(spacing: 8) {
+                        Button {
+                            isAnimating.toggle()
+                        } label: {
+                            Label(
+                                isAnimating ? "暂停动画" : "继续动画",
+                                systemImage: isAnimating
+                                    ? "pause.fill" : "play.fill"
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button("全部显示") {
+                            for kind in FunctionKind.allCases {
+                                updateSetting(kind) {
+                                    $0.isVisible = true
+                                }
+                            }
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("重置") {
+                            resetSettings()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    // Animation speed
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("动画速度")
+                            Spacer()
+                            Text(animationSpeed, format: .number.precision(.fractionLength(2)))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Slider(value: $animationSpeed, in: 0...3)
+                    }
+                    .padding()
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    // Function settings
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("函数列表")
+                            .font(.headline)
+
+                        ForEach(FunctionKind.allCases) { kind in
+                            functionRow(kind)
+
+                            if kind != FunctionKind.allCases.last {
+                                Divider()
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+        
+                }
+                .padding()
+            }
+            .navigationTitle("绘图操作")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationSplitViewColumnWidth(min: 300, ideal: 340)
+        } detail: {
             VStack(spacing: 10) {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -112,13 +184,6 @@ struct ContentView: View {
                             .truncationMode(.middle)
                     }
                     Spacer(minLength: 8)
-                    Button {
-                        showingControls = true
-                    } label: {
-                        Label("操作", systemImage: "slider.horizontal.3")
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityHint("打开函数输入、关键点分析和绘图设置")
                 }
                 .padding(.horizontal, 4)
 
@@ -299,83 +364,24 @@ struct ContentView: View {
                     .background(Color(uiColor: .secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                    // Main buttons
-                    HStack(spacing: 8) {
-                        Button {
-                            isAnimating.toggle()
-                        } label: {
-                            Label(
-                                isAnimating ? "暂停动画" : "继续动画",
-                                systemImage: isAnimating
-                                    ? "pause.fill" : "play.fill"
-                            )
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
 
-                        Button("全部显示") {
-                            for kind in FunctionKind.allCases {
-                                updateSetting(kind) {
-                                    $0.isVisible = true
-                                }
-                            }
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button("重置") {
-                            resetSettings()
-                        }
-                        .buttonStyle(.bordered)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .navigationTitle("函数坐标系")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                    } label: {
+                        Image(systemName: "sidebar.left")
                     }
-
-                    // Animation speed
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("动画速度")
-                            Spacer()
-                            Text(animationSpeed, format: .number.precision(.fractionLength(2)))
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Slider(value: $animationSpeed, in: 0...3)
-                    }
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    // Function settings
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("函数列表")
-                            .font(.headline)
-
-                        ForEach(FunctionKind.allCases) { kind in
-                            functionRow(kind)
-
-                            if kind != FunctionKind.allCases.last {
-                                Divider()
-                            }
-                        }
-                    }
-                    .padding()
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                        }
-                        .padding()
-                    }
-                    .navigationTitle("绘图操作")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("完成") {
-                                showingControls = false
-                            }
-                        }
-                    }
+                    .accessibilityLabel("显示或隐藏操作侧栏")
                 }
             }
         }
+        .navigationSplitViewStyle(.balanced)
     }
 
     // MARK: - Safe Settings Update
