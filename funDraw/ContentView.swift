@@ -1671,11 +1671,11 @@ private struct LayerCubePlacement {
 
 private struct ObjectObserverView: View {
     @State private var shape: ObserverShape = .cube
-    @State private var layerCubes: [[LayerCube]] = [
-        (0..<3).map { index in LayerCube(row: index / 2, column: index % 2) },
-        (0..<2).map { index in LayerCube(row: 0, column: index) },
-        (0..<4).map { index in LayerCube(row: index / 2, column: index % 2) }
-    ]
+    // Default to a Rubik's-cube-like 3 × 3 × 3 arrangement.
+    @State private var layerCubes: [[LayerCube]] = (0..<3).map { _ in
+        (0..<9).map { index in LayerCube(row: index / 3, column: index % 3) }
+    }
+    @State private var isLayersSeparated = false
     @State private var yaw: Double = 0
     @State private var pitch: Double = 0.22
     @State private var dragStartYaw: Double = 0
@@ -1824,13 +1824,14 @@ private struct ObjectObserverView: View {
         for (layer, cubes) in layerCubes.enumerated() {
             let side = gridSide(for: cubes)
             let centeredLayer = Double(layer) - Double(layerCount - 1) / 2
+            let layerGap = isLayersSeparated ? 1.85 : 0.96
             for cube in cubes {
                 let x = (Double(cube.column) - Double(side - 1) / 2) * 0.96
                 let z = (Double(cube.row) - Double(side - 1) / 2) * 0.96
                 result.append(LayerCubePlacement(
                     id: cube.id,
                     layer: layer,
-                    center: SIMD3<Double>(x, centeredLayer * 0.96, z)
+                    center: SIMD3<Double>(x, centeredLayer * layerGap, z)
                 ))
             }
         }
@@ -1898,7 +1899,8 @@ private struct ObjectObserverView: View {
         }
 
         let widestGrid = Double(max(layerCubes.map { gridSide(for: $0) }.max() ?? 1, 1)) * 1.05
-        let totalHeight = Double(max(layerCubes.count, 1)) * 1.05
+        let layerGap = isLayersSeparated ? 1.85 : 1.05
+        let totalHeight = Double(max(layerCubes.count, 1)) * layerGap
         let widthScale = Double(size.width) / widestGrid
         let heightScale = Double(size.height) / max(totalHeight, widestGrid * 0.82)
         return min(widthScale, heightScale) * 0.82
@@ -1930,12 +1932,27 @@ private struct ObjectObserverView: View {
     private var layeredCubeControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("层数：\(layerCubes.count) · 总数：\(layerCubes.reduce(0) { $0 + $1.count })")
-                    .font(.subheadline.weight(.semibold))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("层数：\(layerCubes.count) · 总数：\(layerCubes.reduce(0) { $0 + $1.count })")
+                        .font(.subheadline.weight(.semibold))
+                    Text(isLayersSeparated ? "分层编辑模式：各层已拉开" : "整体显示模式：类似标准魔方")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isLayersSeparated.toggle()
+                    }
+                } label: {
+                    Label(isLayersSeparated ? "合并显示" : "分层编辑", systemImage: "square.3.layers.3d")
+                }
+                .buttonStyle(.borderedProminent)
+                Button {
                     guard layerCubes.count < 8 else { return }
-                    layerCubes.append([LayerCube(row: 0, column: 0)])
+                    layerCubes.append((0..<9).map { index in
+                        LayerCube(row: index / 3, column: index % 3)
+                    })
                 } label: {
                     Label("增加一层", systemImage: "plus")
                 }
@@ -1980,7 +1997,9 @@ private struct ObjectObserverView: View {
                     }
                 }
             }
-            Text("每层自动按方形网格排列（最多 64 个）。单击删除立方体，双击增加立方体。")
+            Text(isLayersSeparated
+                 ? "各层已分开，单击对应立方体删除，双击对应位置添加；也可用每层卡片上的加减按钮。编辑完成后点“合并显示”。"
+                 : "默认按 3×3×3 魔方排列。建议先点“分层编辑”，再单击删除或双击添加，完成后点“合并显示”；也可使用每层卡片上的加减按钮。每层最多 64 个。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -2054,11 +2073,12 @@ private struct ObjectObserverView: View {
         case .layeredCubes:
             let half = 0.46
             let spacing = 0.96
+            let layerGap = isLayersSeparated ? 1.85 : spacing
             let layerCount = layerCubes.count
             for (layer, cubes) in layerCubes.enumerated() {
                 let side = gridSide(for: cubes)
                 let centeredLayer = Double(layer) - Double(layerCount - 1) / 2
-                let centerY = centeredLayer * spacing
+                let centerY = centeredLayer * layerGap
                 for cube in cubes {
                     let centerX = (Double(cube.column) - Double(side - 1) / 2) * spacing
                     let centerZ = (Double(cube.row) - Double(side - 1) / 2) * spacing
