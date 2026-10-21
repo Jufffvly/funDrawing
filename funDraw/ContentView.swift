@@ -332,7 +332,9 @@ struct ContentView: View {
     }
 
     private var graphPanel: some View {
-        VStack(spacing: 10) {
+        let quadratic = settings[.quadratic] ?? FunctionSettings()
+
+        return VStack(spacing: 10) {
                         HStack(alignment: .center, spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("函数绘图")
@@ -346,6 +348,9 @@ struct ContentView: View {
                             Spacer(minLength: 8)
                         }
                         .padding(.horizontal, 4)
+
+                        // 首屏二次函数实验区：调节系数即可实时观察橙色抛物线变化。
+                        quadraticControlsPanel(quadratic)
         
                             // Graph
                             TimelineView(
@@ -369,7 +374,7 @@ struct ContentView: View {
                                     yRange: yRange
                                 )
                             }
-                            .frame(height: 500)
+                            .frame(height: horizontalSizeClass == .compact ? 360 : 500)
                             .background(Color(uiColor: .secondarySystemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             // 在图表上双指捏合，即可同时缩放坐标轴和所有函数曲线
@@ -404,6 +409,88 @@ struct ContentView: View {
                     .navigationTitle("函数坐标系")
                     .navigationBarTitleDisplayMode(.inline)
         
+    }
+
+    // MARK: - Quadratic Coefficient Controls
+
+    private func quadraticControlsPanel(_ config: FunctionSettings) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("二次函数实验")
+                        .font(.headline)
+                    Text("y = ax² + bx + c")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("显示", isOn: Binding(
+                    get: { settings[.quadratic]?.isVisible ?? true },
+                    set: { isVisible in
+                        updateSetting(.quadratic) { $0.isVisible = isVisible }
+                    }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("显示二次函数")
+            }
+
+            HStack(spacing: 12) {
+                coefficientSlider("a", value: config.a, range: -3...3) { value in
+                    updateSetting(.quadratic) {
+                        $0.a = value
+                        $0.isVisible = true
+                    }
+                }
+                coefficientSlider("b", value: config.b, range: -5...5) { value in
+                    updateSetting(.quadratic) {
+                        $0.b = value
+                        $0.isVisible = true
+                    }
+                }
+                coefficientSlider("c", value: config.c, range: -5...5) { value in
+                    updateSetting(.quadratic) {
+                        $0.c = value
+                        $0.isVisible = true
+                    }
+                }
+            }
+
+            Text(String(
+                format: "当前：y = %.2fx² %+.2fx %+.2f",
+                config.a, config.b, config.c
+            ))
+            .font(.caption.monospaced())
+            .foregroundStyle(.orange)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+        }
+        .padding(10)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func coefficientSlider(
+        _ title: String,
+        value: Double,
+        range: ClosedRange<Double>,
+        onChange: @escaping (Double) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 3) {
+                Text("\\(title) =")
+                    .font(.caption.bold())
+                Spacer(minLength: 0)
+                Text(value, format: .number.precision(.fractionLength(1)))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: Binding(
+                get: { value },
+                set: { onChange($0) }
+            ), in: range)
+            .accessibilityLabel("二次函数系数 \\(title)")
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Safe Settings Update
