@@ -1550,7 +1550,7 @@ struct FunctionCanvas: View {
 
 // MARK: - 3D Object Observer
 
-private enum ObserverShape: String, CaseIterable, Identifiable {
+private enum ObserverShape: String, CaseIterable, Identifiable, Equatable {
     case cube = "立方体"
     case cylinder = "圆柱体"
     case cone = "圆锥体"
