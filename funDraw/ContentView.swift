@@ -62,7 +62,7 @@ struct ContentView: View {
     @State private var animationSpeed = 1.0
     @State private var expression = "y = 2x + 1"
 
-    private var parsedExpression: MathExpression? {
+    private var parsedExpression: MathEngine? {
         MathExpression(expression: expression)
     }
 
@@ -110,6 +110,41 @@ struct ContentView: View {
                     .background(Color(uiColor: .secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
+                    // Numerical key-point analysis for the entered expression
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("关键点分析")
+                            .font(.headline)
+                        Text("x 轴交点（零点，当前可视范围内）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if detectedZeros.isEmpty {
+                            Text("当前范围内未检测到零点")
+                                .font(.subheadline)
+                        } else {
+                            Text(detectedZeros.map { "((String(format: "%.4g", $0)), 0)" }.joined(separator: "、"))
+                                .font(.subheadline.monospaced())
+                                .textSelection(.enabled)
+                        }
+                        Text("y 轴交点")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let intercept = yIntercept {
+                            Text("(0, (String(format: "%.4g", intercept)))")
+                                .font(.subheadline.monospaced())
+                                .textSelection(.enabled)
+                        } else {
+                            Text("x = 0 不在函数定义域内")
+                                .font(.subheadline)
+                        }
+                        Text("零点为数值近似；结果随当前 x 轴可视范围更新。")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
                     // Graph
                     TimelineView(
                         .animation(
@@ -123,6 +158,8 @@ struct ContentView: View {
                                 .timeIntervalSinceReferenceDate,
                             animationSpeed: animationSpeed,
                             expression: parsedExpression,
+                            zeroes: detectedZeros,
+                            yIntercept: yIntercept,
                             xRange: xRange,
                             yRange: yRange
                         )
@@ -715,172 +752,23 @@ struct FunctionCanvas: View {
                     with: .color(.blue),
                     style: StrokeStyle(lineWidth: 2.8, lineCap: .round, lineJoin: .round)
                 )
-            }
-        }
-    }
-}
 
-// MARK: - Safe Math Expression Parser
-
-struct MathExpression {
-    private let root: Node
-
-    init?(expression: String) {
-        guard let normalized = Self.normalize(expression) else { return nil }
-        var parser = Parser(source: normalized)
-        guard let node = parser.parse(), parser.isAtEnd else { return nil }
-        root = node
-    }
-
-    static func normalize(_ input: String) -> String? {
-        var text = input.lowercased()
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "×", with: "*")
-            .replacingOccurrences(of: "÷", with: "/")
-            .replacingOccurrences(of: "−", with: "-")
-            .replacingOccurrences(of: "²", with: "^2")
-            .replacingOccurrences(of: "³", with: "^3")
-        if text.hasPrefix("y=") { text = String(text.dropFirst(2)) }
-        return text.isEmpty ? nil : text
-    }
-
-    func value(_ x: Double) -> Double? {
-        let result = root.evaluate(x)
-        return result.isFinite ? result : nil
-    }
-
-    private indirect enum Node {
-        case number(Double), variable
-        case unary(Character, Node)
-        case binary(Character, Node, Node)
-        case function(String, Node)
-
-        func evaluate(_ x: Double) -> Double {
-            switch self {
-            case .number(let value): return value
-            case .variable: return x
-            case .unary(let op, let node): return op == "-" ? -node.evaluate(x) : node.evaluate(x)
-            case .binary(let op, let left, let right):
-                let a = left.evaluate(x), b = right.evaluate(x)
-                switch op {
-                case "+": return a + b
-                case "-": return a - b
-                case "*": return a * b
-                case "/": return b == 0 ? .nan : a / b
-                case "^": return pow(a, b)
-                default: return .nan
+                // Mark numerically detected x-axis zeros and the y-axis intercept.
+                for zero in zeroes where zero >= xRange.lowerBound && zero <= xRange.upperBound {
+                    let p = point(zero, 0)
+                    let dot = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
+                    context.fill(Path(ellipseIn: dot), with: .color(.blue))
                 }
-            case .function(let name, let node):
-                let value = node.evaluate(x)
-                switch name {
-                case "sin": return sin(value)
-                case "cos": return cos(value)
-                case "tan": return tan(value)
-                case "abs": return abs(value)
-                case "sqrt": return value < 0 ? .nan : sqrt(value)
-                case "exp": return exp(value)
-                case "ln": return value <= 0 ? .nan : log(value)
-                case "log": return value <= 0 ? .nan : log10(value)
-                default: return .nan
+                if let intercept = yIntercept,
+                   intercept >= yRange.lowerBound, intercept <= yRange.upperBound {
+                    let p = point(0, intercept)
+                    let dot = CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)
+                    context.fill(Path(ellipseIn: dot), with: .color(.orange))
                 }
             }
         }
     }
-
-    private struct Parser {
-        private let characters: [Character]
-        private var index = 0
-        var isAtEnd: Bool { index == characters.count }
-
-        init(source: String) { characters = Array(source) }
-
-        mutating func parse() -> Node? { parseAddition() }
-
-        private mutating func parseAddition() -> Node? {
-            guard var node = parseMultiplication() else { return nil }
-            while let op = peek, op == "+" || op == "-" {
-                index += 1
-                guard let rhs = parseMultiplication() else { return nil }
-                node = .binary(op, node, rhs)
-            }
-            return node
-        }
-
-        private mutating func parseMultiplication() -> Node? {
-            guard var node = parseUnary() else { return nil }
-            while let op = peek, op == "*" || op == "/" {
-                index += 1
-                guard let rhs = parseUnary() else { return nil }
-                node = .binary(op, node, rhs)
-            }
-            // Accept conventional school notation such as 2x, 3(x + 1), and 2sin(x).
-            while startsImplicitMultiplication {
-                guard let rhs = parseUnary() else { return nil }
-                node = .binary("*", node, rhs)
-            }
-            return node
-        }
-
-        private var startsImplicitMultiplication: Bool {
-            guard let char = peek else { return false }
-            return char == "x" || char == "(" || char.isLetter
-        }
-
-        private mutating func parsePower() -> Node? {
-            guard var node = parsePrimary() else { return nil }
-            if peek == "^" {
-                index += 1
-                // Parse the exponent as unary so 2^-2 is valid and powers remain right-associative.
-                guard let rhs = parseUnary() else { return nil }
-                node = .binary("^", node, rhs)
-            }
-            return node
-        }
-
-        private mutating func parseUnary() -> Node? {
-            if peek == "+" { index += 1; return parseUnary() }
-            if peek == "-" {
-                index += 1
-                guard let node = parseUnary() else { return nil }
-                return .unary("-", node)
-            }
-            return parsePower()
-        }
-
-        private mutating func parsePrimary() -> Node? {
-            guard let char = peek else { return nil }
-            if char == "(" {
-                index += 1
-                guard let node = parseAddition(), peek == ")" else { return nil }
-                index += 1
-                return node
-            }
-            if char.isNumber || char == "." {
-                let start = index
-                while let c = peek, c.isNumber || c == "." { index += 1 }
-                return Double(String(characters[start..<index])).map(Node.number)
-            }
-            if char.isLetter {
-                let start = index
-                while let c = peek, c.isLetter { index += 1 }
-                let name = String(characters[start..<index])
-                if name == "x" { return .variable }
-                if name == "pi" { return .number(Double.pi) }
-                if name == "e" { return .number(exp(1)) }
-                let functions: Set<String> = ["sin", "cos", "tan", "abs", "sqrt", "exp", "ln", "log"]
-                guard functions.contains(name), peek == "(" else { return nil }
-                index += 1
-                guard let argument = parseAddition(), peek == ")" else { return nil }
-                index += 1
-                return .function(name, argument)
-            }
-            return nil
-        }
-
-        private var peek: Character? { index < characters.count ? characters[index] : nil }
-    }
 }
-
 
 // MARK: - Preview
 
