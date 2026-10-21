@@ -354,7 +354,7 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("函数绘图")
                                     .font(.title2.bold())
-                                Text("六种函数 · 参数实时可调")
+                                Text("内置函数与自定义函数 · 参数实时可调")
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -449,7 +449,8 @@ struct ContentView: View {
     // MARK: - Custom Function Controls
 
     private var customExpressionControlsPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("自定义函数", systemImage: "function")
                     .font(.headline)
@@ -497,9 +498,10 @@ struct ContentView: View {
             Text("支持幂运算、括号、隐式乘法及 sin、cos、tan、abs、sqrt、exp、ln、log 等函数。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
