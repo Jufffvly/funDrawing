@@ -49,6 +49,11 @@ struct FunctionSettings {
 
 // MARK: - Main View
 
+private enum AppDestination: Hashable {
+    case functionDrawing
+    case objectObserver
+}
+
 struct ContentView: View {
 
     @State private var settings: [FunctionKind: FunctionSettings] =
@@ -68,7 +73,8 @@ struct ContentView: View {
     @State private var isCustomExpressionVisible = false
     @State private var isComparisonVisible = false
     @State private var isAdditionalExpressionVisible = false
-    @State private var columnVisibility: NavigationSplitViewVisibility = .detailOnly
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var selectedDestination: AppDestination = .functionDrawing
 
     private var parsedExpression: MathEngine? {
         MathEngine(expression: expression)
@@ -111,7 +117,6 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showingControls = false
     @State private var showingExpressionEditor = false
-    @State private var showingObjectObserver = false
     @State private var selectedFunctionIndex = 2
     @FocusState private var focusedExpressionField: ExpressionField?
 
@@ -124,52 +129,149 @@ struct ContentView: View {
     var body: some View {
         Group {
             if horizontalSizeClass == .compact {
-                // iPhone：绘图区始终作为首屏，操作集中到可见的工具按钮中。
+                // iPhone：保留绘图区优先的首屏，通过左上角功能菜单切换页面。
                 NavigationStack {
-                    graphPanel
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
+                    Group {
+                        if selectedDestination == .functionDrawing {
+                            graphPanel
+                        } else {
+                            ObjectObserverView()
+                        }
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Menu {
+                                Button {
+                                    selectedDestination = .functionDrawing
+                                } label: {
+                                    Label("函数绘图", systemImage: "function")
+                                }
+                                Button {
+                                    selectedDestination = .objectObserver
+                                } label: {
+                                    Label("观察物体", systemImage: "cube.transparent")
+                                }
+                            } label: {
+                                Image(systemName: "sidebar.left")
+                            }
+                            .accessibilityLabel("切换功能页面")
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            if selectedDestination == .functionDrawing {
                                 Button {
                                     showingControls = true
                                 } label: {
                                     Label("操作", systemImage: "slider.horizontal.3")
                                 }
                                 .accessibilityLabel("打开绘图操作")
+                            } else {
+                                Button {
+                                    selectedDestination = .functionDrawing
+                                } label: {
+                                    Label("函数绘图", systemImage: "function")
+                                }
                             }
                         }
+                    }
                 }
                 .sheet(isPresented: $showingControls) {
                     NavigationStack {
-                        controlsPanel
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarTrailing) {
-                                    Button("完成") {
-                                        showingControls = false
-                                    }
+                        VStack(spacing: 0) {
+                            destinationSwitcher
+                            controlsPanel
+                        }
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("完成") {
+                                    showingControls = false
                                 }
                             }
+                        }
                     }
                 }
             } else {
-                // iPad / regular width：保留分栏布局，绘图区默认优先显示。
+                // iPad / regular width：左侧功能导航，函数绘图模式下继续显示原有控制面板。
                 NavigationSplitView(columnVisibility: $columnVisibility) {
-                    controlsPanel
-                } detail: {
-                    graphPanel
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button {
-                                    columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
-                                } label: {
-                                    Image(systemName: "sidebar.left")
-                                }
-                                .accessibilityLabel("显示或隐藏操作侧栏")
-                            }
+                    VStack(spacing: 0) {
+                        destinationSwitcher
+                        if selectedDestination == .functionDrawing {
+                            controlsPanel
+                        } else {
+                            Spacer()
                         }
+                    }
+                    .frame(minWidth: 260)
+                } detail: {
+                    Group {
+                        if selectedDestination == .functionDrawing {
+                            graphPanel
+                        } else {
+                            ObjectObserverView()
+                        }
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button {
+                                columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                            } label: {
+                                Image(systemName: "sidebar.left")
+                            }
+                            .accessibilityLabel("显示或隐藏功能侧栏")
+                        }
+                    }
                 }
                 .navigationSplitViewStyle(.balanced)
             }
         }
+    }
+
+    private var destinationSwitcher: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("功能切换")
+                .font(.headline)
+                .padding(.horizontal, 4)
+
+            Button {
+                selectedDestination = .functionDrawing
+                showingControls = false
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "function")
+                    Text("函数绘图")
+                    Spacer()
+                    if selectedDestination == .functionDrawing {
+                        Image(systemName: "checkmark")
+                            .font(.caption.bold())
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(selectedDestination == .functionDrawing ? Color.accentColor.opacity(0.14) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                selectedDestination = .objectObserver
+                showingControls = false
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "cube.transparent")
+                    Text("观察物体")
+                    Spacer()
+                    if selectedDestination == .objectObserver {
+                        Image(systemName: "checkmark")
+                            .font(.caption.bold())
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(selectedDestination == .objectObserver ? Color.accentColor.opacity(0.14) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding()
     }
 
     private var controlsPanel: some View {
@@ -467,14 +569,6 @@ struct ContentView: View {
             .frame(maxHeight: .infinity)
         }
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showingObjectObserver = true
-                } label: {
-                    Label("物体观察", systemImage: "cube.transparent")
-                }
-                .accessibilityLabel("打开三维物体观察")
-            }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("收起键盘") {
@@ -484,16 +578,6 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingExpressionEditor) {
             expressionEditorSheet
-        }
-        .sheet(isPresented: $showingObjectObserver) {
-            NavigationStack {
-                ObjectObserverView()
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("完成") { showingObjectObserver = false }
-                        }
-                    }
-            }
         }
         .navigationTitle("函数坐标系")
         .navigationBarTitleDisplayMode(.inline)
