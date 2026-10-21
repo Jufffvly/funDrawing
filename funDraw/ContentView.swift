@@ -39,7 +39,7 @@ enum FunctionKind: String, CaseIterable, Identifiable {
 // MARK: - Function Settings
 
 struct FunctionSettings {
-    var isVisible: Bool = true
+    var isVisible: Bool = false
     var a: Double = 0.5
     var b: Double = 0.0
     var c: Double = 0.0
@@ -53,8 +53,10 @@ struct ContentView: View {
 
     @State private var settings: [FunctionKind: FunctionSettings] =
         Dictionary(
-            uniqueKeysWithValues: FunctionKind.allCases.map {
-                ($0, FunctionSettings())
+            uniqueKeysWithValues: FunctionKind.allCases.map { kind in
+                var config = FunctionSettings()
+                config.isVisible = (kind == .quadratic)
+                return (kind, config)
             }
         )
 
@@ -62,6 +64,8 @@ struct ContentView: View {
     @State private var animationSpeed = 1.0
     @State private var expression = "y = x^2 - 4"
     @State private var comparisonExpression = "y = x"
+    @State private var isCustomExpressionVisible = false
+    @State private var isComparisonVisible = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .detailOnly
 
     private var parsedExpression: MathEngine? {
@@ -158,6 +162,10 @@ struct ContentView: View {
                             // Arbitrary function expression input
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("任意函数输入")
+                                    .font(.headline)
+                                Toggle("显示自定义函数", isOn: $isCustomExpressionVisible)
+                                Toggle("显示比较函数（需先开启自定义函数）", isOn: $isComparisonVisible)
+                                    .disabled(!isCustomExpressionVisible)
                                     .font(.headline)
                                 TextField("例如：y = x^2 - 4", text: $expression)
                                     .textFieldStyle(.roundedBorder)
@@ -339,7 +347,7 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("函数绘图")
                                     .font(.title2.bold())
-                                Text(expression)
+                                Text("二次函数 y = ax² + bx + c")
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -349,9 +357,8 @@ struct ContentView: View {
                         }
                         .padding(.horizontal, 4)
 
-                        // 首屏二次函数实验区：调节系数即可实时观察橙色抛物线变化。
-                        quadraticControlsPanel(quadratic)
-        
+                        // 坐标系优先显示，参数控制放在图表下方，方便操作。
+
                             // Graph
                             TimelineView(
                                 .animation(
@@ -364,8 +371,8 @@ struct ContentView: View {
                                     time: timeline.date
                                         .timeIntervalSinceReferenceDate,
                                     animationSpeed: animationSpeed,
-                                    expression: parsedExpression,
-                                    comparisonExpression: parsedComparisonExpression,
+                                    expression: isCustomExpressionVisible ? parsedExpression : nil,
+                                    comparisonExpression: (isCustomExpressionVisible && isComparisonVisible) ? parsedComparisonExpression : nil,
                                     zeroes: detectedZeros,
                                     yIntercept: yIntercept,
                                     quadraticAnalysis: quadraticAnalysis,
@@ -401,8 +408,8 @@ struct ContentView: View {
                                         baseYRange = yRange
                                     }
                             )
-        
-        
+
+                        quadraticControlsPanel(quadratic)
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -425,7 +432,7 @@ struct ContentView: View {
                 }
                 Spacer()
                 Toggle("显示", isOn: Binding(
-                    get: { settings[.quadratic]?.isVisible ?? true },
+                    get: { settings[.quadratic]?.isVisible ?? false },
                     set: { isVisible in
                         updateSetting(.quadratic) { $0.isVisible = isVisible }
                     }
@@ -516,7 +523,7 @@ struct ContentView: View {
             Toggle(
                 isOn: Binding(
                     get: {
-                        settings[kind]?.isVisible ?? true
+                        settings[kind]?.isVisible ?? false
                     },
                     set: { newValue in
                         updateSetting(kind) {
@@ -688,11 +695,15 @@ struct ContentView: View {
 
     private func resetSettings() {
         settings = Dictionary(
-            uniqueKeysWithValues: FunctionKind.allCases.map {
-                ($0, FunctionSettings())
+            uniqueKeysWithValues: FunctionKind.allCases.map { kind in
+                var config = FunctionSettings()
+                config.isVisible = (kind == .quadratic)
+                return (kind, config)
             }
         )
 
+        isCustomExpressionVisible = false
+        isComparisonVisible = false
         animationSpeed = 1.0
         isAnimating = true
         xRange = initialRange
