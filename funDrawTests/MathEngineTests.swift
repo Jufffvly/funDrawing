@@ -73,4 +73,28 @@ final class MathEngineTests: XCTestCase {
         let linear = try XCTUnwrap(MathEngine(expression: "2x + 3"))
         XCTAssertEqual(try XCTUnwrap(linear.value(0)), 3, accuracy: 1e-10)
     }
+    func testQuadraticAnalysisExtractsVertexAndAxis() throws {
+        let upward = try XCTUnwrap(MathEngine(expression: "y = x^2 - 4x + 1").quadraticAnalysis)
+        XCTAssertEqual(upward.a, 1, accuracy: 1e-10)
+        XCTAssertEqual(upward.b, -4, accuracy: 1e-10)
+        XCTAssertEqual(upward.c, 1, accuracy: 1e-10)
+        XCTAssertEqual(upward.vertexX, 2, accuracy: 1e-10)
+        XCTAssertEqual(upward.vertexY, -3, accuracy: 1e-10)
+        XCTAssertEqual(upward.axisOfSymmetry, 2, accuracy: 1e-10)
+        XCTAssertNil(MathEngine(expression: "x^3 + x").quadraticAnalysis)
+        XCTAssertNil(MathEngine(expression: "2x + 1").quadraticAnalysis)
+    }
+
+    func testTangentRootsAndTangentialIntersections() throws {
+        let fourthPower = try XCTUnwrap(MathEngine(expression: "x^4"))
+        XCTAssertTrue(fourthPower.approximateZeros(in: -1.3...2.1).contains { abs($0) < 1e-4 })
+
+        let aboveAxis = try XCTUnwrap(MathEngine(expression: "x^2 + 0.01"))
+        XCTAssertTrue(aboveAxis.approximateZeros(in: -2...2).isEmpty)
+
+        let parabola = try XCTUnwrap(MathEngine(expression: "x^2"))
+        let roots = parabola.approximateIntersections(in: -2...2, withFunction: { _ in 0 })
+        XCTAssertTrue(roots.contains { abs($0) < 1e-4 })
+    }
+
 }
