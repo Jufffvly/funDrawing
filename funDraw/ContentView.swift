@@ -163,10 +163,17 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("任意函数输入")
                                     .font(.headline)
-                                Toggle("显示自定义函数", isOn: $isCustomExpressionVisible)
+                                Toggle("显示自定义函数", isOn: Binding(
+                                    get: { isCustomExpressionVisible },
+                                    set: { isVisible in
+                                        isCustomExpressionVisible = isVisible
+                                        if !isVisible {
+                                            isComparisonVisible = false
+                                        }
+                                    }
+                                ))
                                 Toggle("显示比较函数（需先开启自定义函数）", isOn: $isComparisonVisible)
                                     .disabled(!isCustomExpressionVisible)
-                                    .font(.headline)
                                 TextField("例如：y = x^2 - 4", text: $expression)
                                     .textFieldStyle(.roundedBorder)
                                     .textInputAutocapitalization(.never)
