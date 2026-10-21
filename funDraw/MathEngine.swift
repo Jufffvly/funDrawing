@@ -157,6 +157,11 @@ struct MathEngine {
             xs.append(x)
             ys.append(difference(x))
         }
+        let finiteResiduals = ys.compactMap { $0 }
+        // Coincident/overlapping functions have infinitely many intersections; don't emit every sample.
+        if !finiteResiduals.isEmpty && finiteResiduals.allSatisfy({ abs($0) < 1e-9 }) {
+            return []
+        }
         var roots: [Double] = []
         for i in 1...count {
             guard let left = ys[i - 1], let right = ys[i] else { continue }
@@ -175,6 +180,10 @@ struct MathEngine {
                 }
             }
             roots.append(lo + (hi - lo) / 2)
+        }
+
+        if let lastX = xs.last, let lastY = ys.last, abs(lastY) < 1e-9 {
+            roots.append(lastX)
         }
 
         // Minimize |f-g| near sampled local minima to catch tangential intersections.
