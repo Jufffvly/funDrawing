@@ -121,7 +121,7 @@ struct ContentView: View {
                             Text("当前范围内未检测到零点")
                                 .font(.subheadline)
                         } else {
-                            Text(detectedZeros.map { "(\\(String(format: "%.4g", $0)), 0)" }.joined(separator: "、"))
+                            Text(detectedZeros.map { "(\(String(format: "%.4g", $0)), 0)" }.joined(separator: "、"))
                                 .font(.subheadline.monospaced())
                                 .textSelection(.enabled)
                         }
@@ -129,7 +129,7 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         if let intercept = yIntercept {
-                            Text("(0, \\(String(format: "%.4g", intercept)))")
+                            Text("(0, \(String(format: "%.4g", intercept)))")
                                 .font(.subheadline.monospaced())
                                 .textSelection(.enabled)
                         } else {
@@ -478,6 +478,8 @@ struct FunctionCanvas: View {
     let time: Double
     let animationSpeed: Double
     let expression: MathEngine?
+    let zeroes: [Double]
+    let yIntercept: Double?
     let xRange: ClosedRange<Double>
     let yRange: ClosedRange<Double>
 
