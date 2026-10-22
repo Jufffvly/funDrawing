@@ -2010,12 +2010,7 @@ private struct ObjectObserverView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(layerCubes.indices, id: \.self) { index in
-                        VStack(spacing: 5) {
-                            Text("第\(index + 1)层")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(layerCubes[index].count) 个")
-                                .font(.subheadline.monospacedDigit())
+                        VStack(spacing: 0) {
                             HStack(spacing: 0) {
                                 Button {
                                     guard layerCubes[index].count > 0 else { return }
