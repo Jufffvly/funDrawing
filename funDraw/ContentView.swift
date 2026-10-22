@@ -1955,23 +1955,57 @@ private struct ObjectObserverView: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
-            HStack(spacing: 10) {
-                Button {
-                    guard layerCubes.count < 8 else { return }
-                    layerCubes.append((0..<9).map { index in
-                        LayerCube(row: index / 3, column: index % 3)
-                    })
-                } label: {
-                    Label("增加一层", systemImage: "plus")
+            HStack(spacing: 12) {
+                Text("层数")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 0) {
+                    Button {
+                        guard layerCubes.count > 1 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            layerCubes.removeLast()
+                        }
+                    } label: {
+                        Image(systemName: "minus")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 36, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(layerCubes.count <= 1)
+                    .accessibilityLabel("减少层数")
+
+                    Text("\(layerCubes.count)")
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .frame(minWidth: 34)
+                        .contentTransition(.numericText())
+
+                    Button {
+                        guard layerCubes.count < 8 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            layerCubes.append((0..<9).map { index in
+                                LayerCube(row: index / 3, column: index % 3)
+                            })
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 36, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(layerCubes.count >= 8)
+                    .accessibilityLabel("增加层数")
                 }
-                .disabled(layerCubes.count >= 8)
-                Button {
-                    guard layerCubes.count > 1 else { return }
-                    layerCubes.removeLast()
-                } label: {
-                    Label("减少一层", systemImage: "minus")
+                .buttonStyle(.plain)
+                .background(Color(uiColor: .tertiarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                 }
-                .disabled(layerCubes.count <= 1)
+                Spacer(minLength: 0)
+                Text("每层最多 64 个")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -1982,20 +2016,41 @@ private struct ObjectObserverView: View {
                                 .foregroundStyle(.secondary)
                             Text("\(layerCubes[index].count) 个")
                                 .font(.subheadline.monospacedDigit())
-                            HStack(spacing: 8) {
+                            HStack(spacing: 0) {
                                 Button {
                                     guard layerCubes[index].count > 0 else { return }
                                     layerCubes[index].removeLast()
                                 } label: {
-                                    Image(systemName: "minus.circle")
+                                    Image(systemName: "minus")
+                                        .font(.caption.weight(.semibold))
+                                        .frame(width: 28, height: 28)
+                                        .contentShape(Rectangle())
                                 }
                                 .disabled(layerCubes[index].count == 0)
+                                .accessibilityLabel("减少第\(index + 1)层立方体")
+
+                                Text("\(layerCubes[index].count)")
+                                    .font(.caption.monospacedDigit().weight(.semibold))
+                                    .frame(minWidth: 24)
+                                    .contentTransition(.numericText())
+
                                 Button {
                                     addCube(toLayer: index)
                                 } label: {
-                                    Image(systemName: "plus.circle")
+                                    Image(systemName: "plus")
+                                        .font(.caption.weight(.semibold))
+                                        .frame(width: 28, height: 28)
+                                        .contentShape(Rectangle())
                                 }
                                 .disabled(layerCubes[index].count >= 64)
+                                .accessibilityLabel("增加第\(index + 1)层立方体")
+                            }
+                            .buttonStyle(.plain)
+                            .background(Color(uiColor: .tertiarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                             }
                         }
                         .padding(10)
