@@ -2007,56 +2007,12 @@ private struct ObjectObserverView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(layerCubes.indices, id: \.self) { index in
-                        VStack(spacing: 0) {
-                            HStack(spacing: 0) {
-                                Button {
-                                    guard layerCubes[index].count > 0 else { return }
-                                    layerCubes[index].removeLast()
-                                } label: {
-                                    Image(systemName: "minus")
-                                        .font(.caption.weight(.semibold))
-                                        .frame(width: 28, height: 28)
-                                        .contentShape(Rectangle())
-                                }
-                                .disabled(layerCubes[index].count == 0)
-                                .accessibilityLabel("减少第\(index + 1)层立方体")
-
-                                Text("\(layerCubes[index].count)")
-                                    .font(.caption.monospacedDigit().weight(.semibold))
-                                    .frame(minWidth: 24)
-                                    .contentTransition(.numericText())
-
-                                Button {
-                                    addCube(toLayer: index)
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(.caption.weight(.semibold))
-                                        .frame(width: 28, height: 28)
-                                        .contentShape(Rectangle())
-                                }
-                                .disabled(layerCubes[index].count >= 64)
-                                .accessibilityLabel("增加第\(index + 1)层立方体")
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color(uiColor: .tertiarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                            }
-                        }
-                        .padding(10)
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                }
-            }
+            Text("各层数量可通过点击立方体直接编辑。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             Text(isLayersSeparated
-                 ? "各层已分开，单击对应立方体删除，双击对应位置添加；也可用每层卡片上的加减按钮。编辑完成后点“合并显示”。"
-                 : "默认按 3×3×3 魔方排列。建议先点“分层编辑”，再单击删除或双击添加，完成后点“合并显示”；也可使用每层卡片上的加减按钮。每层最多 64 个。")
+                 ? "各层已分开，单击对应立方体删除，双击对应位置添加。编辑完成后点“合并显示”。"
+                 : "默认按 3×3×3 魔方排列。建议先点“分层编辑”，再单击删除或双击添加，完成后点“合并显示”。每层最多 64 个。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
