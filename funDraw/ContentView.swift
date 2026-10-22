@@ -1680,6 +1680,9 @@ private struct ObjectObserverView: View {
     @State private var pitch: Double = 0.22
     @State private var dragStartYaw: Double = 0
     @State private var dragStartPitch: Double = 0
+    @State private var cubeEdgeLength: Double = 1.0
+    @State private var cylinderRadius: Double = 2.0
+    @State private var solidHeight: Double = 4.0
 
     var body: some View {
         VStack(spacing: 16) {
@@ -1769,6 +1772,8 @@ private struct ObjectObserverView: View {
             }
             .frame(minHeight: 280)
             .padding(.horizontal)
+
+            volumeCalculationPanel
 
             VStack(spacing: 10) {
                 Text("标准视角")
@@ -2004,6 +2009,92 @@ private struct ObjectObserverView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+        .padding(.horizontal)
+    }
+
+    private var volumeCalculationPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("体积公式演示", systemImage: "function")
+                .font(.headline)
+
+            switch shape {
+            case .cube:
+                Text("立方体：体积 = 棱长 × 棱长 × 棱长")
+                    .font(.subheadline)
+                HStack {
+                    Text("棱长 a")
+                    Slider(value: $cubeEdgeLength, in: 0.5...5, step: 0.5)
+                    Text(String(format: "%.1f", cubeEdgeLength))
+                        .monospacedDigit()
+                        .frame(width: 36)
+                }
+                Text(String(format: "V = a³ = %.1f × %.1f × %.1f = %.3f 立方单位", cubeEdgeLength, cubeEdgeLength, cubeEdgeLength, pow(cubeEdgeLength, 3)))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.blue)
+
+            case .layeredCubes:
+                let cubeCount = layerCubes.reduce(0) { $0 + $1.count }
+                Text("多层正方体：总体积 = 单个小正方体体积 × 个数")
+                    .font(.subheadline)
+                HStack {
+                    Text("小正方体棱长")
+                    Slider(value: $cubeEdgeLength, in: 0.5...3, step: 0.5)
+                    Text(String(format: "%.1f", cubeEdgeLength))
+                        .monospacedDigit()
+                        .frame(width: 36)
+                }
+                Text("小正方体数量：\(cubeCount) 个")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(String(format: "V = a³ × n = %.1f³ × %d = %.3f 立方单位", cubeEdgeLength, cubeCount, pow(cubeEdgeLength, 3) * Double(cubeCount)))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.blue)
+                Text("增减立方体或编辑层数，体积结果会同步更新。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+            case .cylinder, .cone:
+                Text(shape == .cylinder ? "圆柱体：体积 = 底面积 × 高 = πr²h" : "圆锥体：体积 = 底面积 × 高 ÷ 3 = ⅓πr²h")
+                    .font(.subheadline)
+                HStack {
+                    Text("底面半径 r")
+                    Slider(value: $cylinderRadius, in: 0.5...5, step: 0.5)
+                    Text(String(format: "%.1f", cylinderRadius))
+                        .monospacedDigit()
+                        .frame(width: 36)
+                }
+                HStack {
+                    Text("高 h")
+                    Slider(value: $solidHeight, in: 0.5...8, step: 0.5)
+                    Text(String(format: "%.1f", solidHeight))
+                        .monospacedDigit()
+                        .frame(width: 36)
+                }
+                let factor = shape == .cylinder ? 1.0 : 1.0 / 3.0
+                let volume = Double.pi * cylinderRadius * cylinderRadius * solidHeight * factor
+                Text(String(format: "V = π × %.1f² × %.1f%@ = %.3f 立方单位", cylinderRadius, solidHeight, shape == .cone ? " ÷ 3" : "", volume))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.blue)
+
+            case .sphere:
+                Text("球体：体积 = ⁴⁄₃πr³")
+                    .font(.subheadline)
+                HStack {
+                    Text("半径 r")
+                    Slider(value: $cylinderRadius, in: 0.5...5, step: 0.5)
+                    Text(String(format: "%.1f", cylinderRadius))
+                        .monospacedDigit()
+                        .frame(width: 36)
+                }
+                Text(String(format: "V = ⁴⁄₃π × %.1f³ = %.3f 立方单位", cylinderRadius, 4.0 / 3.0 * Double.pi * pow(cylinderRadius, 3)))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.blue)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal)
     }
 
